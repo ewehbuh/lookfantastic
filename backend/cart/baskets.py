@@ -58,4 +58,7 @@ def _merge_carts(source_cart, target_cart, request):
             existing.save(update_fields=['quantity'])
         else:
             CartItem.objects.create(cart=target_cart, variant_id=item.variant_id, quantity=quantity)
+    if source_cart.voucher_id and not target_cart.voucher_id:
+        target_cart.voucher_id = source_cart.voucher_id
+        target_cart.save(update_fields=['voucher'])
     request._cart_warnings = warnings

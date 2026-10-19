@@ -7,7 +7,10 @@ from .views import UserViewSet, WishlistViewSet, PointsViewSet, AdminUserViewSet
 
 from .google_login import providers, start as google_start, GoogleLoginView
 
+from .addresses import AddressViewSet
+
 router = DefaultRouter()
+router.register('addresses', AddressViewSet, basename='address')
 router.register(r'wishlist', WishlistViewSet, basename='wishlist')
 router.register(r'points', PointsViewSet, basename='points')
 router.register(r'admin/users', AdminUserViewSet, basename='admin-user')

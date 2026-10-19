@@ -83,6 +83,28 @@ class CartViewSet(viewsets.GenericViewSet):
             item.delete()
             return Response(CartSerializer(cart, context={'request': request}).data)
 
+    @action(detail=False, methods=['post', 'delete'])
+    def voucher(self, request):
+        from .models import Voucher
+        from .vouchers import discount_for
+        from rest_framework.exceptions import ValidationError
+        cart = get_or_create_cart(request)
+        with transaction.atomic():
+            Cart.objects.select_for_update().get(pk=cart.pk)
+            if request.method == 'DELETE':
+                cart.voucher = None
+            else:
+                code = request.data.get('code')
+                if not isinstance(code, str) or not 1 <= len(code.strip()) <= 40:
+                    raise ValidationError({'code': 'A valid voucher code is required.'})
+                candidate = Voucher.objects.select_for_update().filter(code=code.strip().upper()).first()
+                if not candidate:
+                    raise ValidationError({'code': 'Voucher is unavailable.'})
+                discount_for(candidate, cart.total_price)
+                cart.voucher = candidate
+            cart.save(update_fields=['voucher'])
+        return Response(CartSerializer(cart, context={'request': request}).data)
+
     @action(detail=False, methods=['post'])
     def checkout(self, request):
         cart = get_or_create_cart(request)
@@ -90,7 +112,7 @@ class CartViewSet(viewsets.GenericViewSet):
             return Response({'error': 'Cart is empty.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate shipping details
-        checkout_serializer = CheckoutSerializer(data=request.data)
+        checkout_serializer = CheckoutSerializer(data=request.data, context={'request': request})
         checkout_serializer.is_valid(raise_exception=True)
         data = checkout_serializer.validated_data
 

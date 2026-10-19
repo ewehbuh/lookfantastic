@@ -50,12 +50,14 @@ class ProductListSerializer(serializers.ModelSerializer):
     brand = BrandSerializer(read_only=True)
     image = serializers.SerializerMethodField()
     on_offer = serializers.BooleanField(read_only=True)
+    rating_average = serializers.FloatField(read_only=True, allow_null=True)
+    review_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'slug', 'brand', 'price', 'compare_at_price',
-            'default_variant', 'image', 'on_offer', 'featured'   # ← added
+            'default_variant', 'image', 'on_offer', 'rating_average', 'review_count', 'featured'   # ← added
         ]
 
     def get_image(self, obj):
@@ -72,13 +74,15 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
     offers = serializers.SerializerMethodField()
     default_variant = serializers.SerializerMethodField()
+    rating_average = serializers.FloatField(read_only=True, allow_null=True)
+    review_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'slug', 'brand', 'category', 'description',
             'how_to_use', 'ingredients', 'variants', 'images', 'offers',
-            'default_variant', 'featured',   # ← added
+            'default_variant', 'rating_average', 'review_count', 'featured',   # ← added
             'meta_title', 'meta_description'
         ]
 
@@ -86,12 +90,8 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         return VariantSerializer(obj.variants.filter(is_active=True), many=True, context=self.context).data
 
     def get_offers(self, obj):
-        active_offers = obj.offers.filter(
-            is_active=True,
-            valid_from__lte=timezone.now(),
-            valid_to__gte=timezone.now(),
-            offer_type__in=["fixed", "percentage"]
-        )
+        from .promotions import applicable_offers
+        active_offers = applicable_offers(obj)
         return OfferSerializer(active_offers, many=True).data
 
     def get_default_variant(self, obj):
@@ -104,4 +104,4 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 class OfferSerializer(serializers.ModelSerializer):
     class Meta:
         model = Offer
-        fields = ['id', 'name', 'slug', 'offer_type', 'value', 'valid_from', 'valid_to']
+        fields = ['id', 'name', 'slug', 'offer_type', 'value', 'valid_from', 'valid_to', 'buy_quantity', 'free_quantity']

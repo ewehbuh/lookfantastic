@@ -67,3 +67,21 @@ class PointTransaction(models.Model):
     type = models.CharField(max_length=5, choices=TYPE_CHOICES)
     description = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Address(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='addresses')
+    label = models.CharField(max_length=80, blank=True)
+    full_name = models.CharField(max_length=100)
+    line1 = models.CharField(max_length=150)
+    line2 = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100)
+    postcode = models.CharField(max_length=20)
+    country = models.CharField(max_length=2)
+    phone = models.CharField(max_length=30, blank=True)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-is_default', 'pk']
+        constraints = [models.UniqueConstraint(fields=['user'], condition=models.Q(is_default=True),
+                                               name='address_one_default_per_user')]

@@ -64,7 +64,7 @@ It must be updated before customers can use these flows:
    only by a verified webhook with matching reference, amount and currency.
 4. Display confirmed order status from an authorised order-history response
    (`GET /api/cart/orders/` for authenticated users). The return URL itself is
-   never proof of payment. Guest order-status retrieval is not implemented.
+   never proof of payment. Guest order-status retrieval uses the token-based endpoints described in docs/commerce-features.md.
 
 The backend calculates prices and shipping. It reserves stock and clears the basket
 when a hosted checkout is created. Failed or expired provider events restore stock
@@ -166,11 +166,8 @@ null promotes a node to root. Self/descendant parenting is rejected. Negative SK
 prices, reference prices below selling prices, invalid offer dates and percentages
 outside 0–100 are rejected. Existing records are not rewritten by these checks.
 
-Discount support remains limited to directly assigned percentage/fixed product
-offers. Category/brand offer targeting and per-product override values are not
-implemented in basket pricing; buy-X-get-Y configuration is explicitly rejected by
-the product management API until its pricing rules are implemented. These limitations
-must be addressed before using those promotion types commercially.
+Promotion targeting, overrides, vouchers and buy-X-get-Y pricing are now implemented.
+See [Commerce feature APIs](docs/commerce-features.md) for rules and request formats.
 
 ## Blog checks
 
@@ -238,7 +235,7 @@ The formerly empty search app now exposes read-only `GET /api/search/?q=night+cr
 Use `search=` as a compatibility alias; do not send conflicting or repeated queries.
 The query is required, limited to 200 characters and ten terms, with whitespace
 normalised. Every term must match a product's name, brand, description or active SKU.
-Matching uses database case-insensitive substring lookups, not fuzzy/relevance search.
+Matching uses database substring lookups, relevance ordering and an explicit typo fallback.
 No external search service or credentials are required.
 
 The endpoint shares catalogue visibility, brand/category paths, price ranges, offer
@@ -249,7 +246,7 @@ normal empty result set; missing/invalid queries or filters return 400.
 
 Example: `/api/search/?q=night&category=skincare&max_price=30&ordering=price`.
 The frontend still needs a search input and results page wired to this endpoint.
-Suggestions, typo correction, synonyms and relevance ranking are not implemented.
+Suggestions, typo correction and relevance ranking are now implemented; synonyms are not configured. See docs/commerce-features.md.
 Run `python manage.py test search subscriptions blog products accounts cart` for all
 current app checks.
 
@@ -283,5 +280,15 @@ and checkout respect public catalogue visibility. Basket variants now include
 multiplication, consistently in basket and checkout. Totals above the order model's
 supported maximum are rejected before a payment provider is called.
 
-Live payments, guest order-status retrieval and frontend payment/search wiring remain
-unverified or incomplete as described above. No real charges are made by these tests.
+Live payments and frontend payment/search wiring remain unverified or incomplete.
+Guest order-status retrieval is now available through scoped, expiring access tokens. No real charges are made by these tests.
+
+
+## Additional commerce APIs
+
+See [Commerce feature APIs](docs/commerce-features.md) for promotions/vouchers,
+moderated reviews/ratings, saved addresses, secure guest orders, shipment tracking,
+returns, Stripe refunds, search suggestions, typo correction and relevance ranking.
+The guide documents endpoint contracts, migration commands and provider limitations.
+Frontend integration is still required. Tracking updates are manual; crypto refunds
+require external handling and are not automatically marked successful.

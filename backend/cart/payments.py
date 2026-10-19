@@ -17,7 +17,10 @@ from rest_framework.response import Response
 
 from products.models import Variant
 from products.catalogue import visible_products
-from .models import Cart, Order, OrderItem
+from .models import Cart, Order, OrderItem, Voucher
+from products.promotions import quote_line
+from .vouchers import discount_for
+from .guest_orders import issue_token
 from .serializers import OrderSerializer
 
 
@@ -51,19 +54,23 @@ def create_checkout(request, cart, data):
                 if not v or not v.is_active or item.quantity < 1 or v.stock < item.quantity:
                     return Response({'error': 'An item is unavailable or has insufficient stock.'}, status=400)
                 item.variant = v
-            prices = [(i.unit_price.quantize(Decimal('.01'), rounding=ROUND_HALF_UP), i) for i in items]
-            subtotal = sum((price * i.quantity for price, i in prices), Decimal('0.00'))
-            shipping = Decimal('0.00') if subtotal >= 20 else Decimal('3.99')
-            if subtotal + shipping > Decimal('99999999.99'):
+            prices = [(quote_line(i.variant, i.quantity), i) for i in items]
+            subtotal = sum((quote['line_total'] for quote, i in prices), Decimal('0.00'))
+            voucher = Voucher.objects.select_for_update().filter(pk=cart.voucher_id).first() if cart.voucher_id else None
+            discount = discount_for(voucher, subtotal)
+            shipping = Decimal('0.00') if subtotal - discount >= 20 else Decimal('3.99')
+            if subtotal > Decimal('99999999.99') or subtotal - discount + shipping > Decimal('99999999.99'):
                 return Response({'error': 'Order total exceeds the supported amount.'}, status=400)
             order = Order.objects.create(**{k: v for k, v in data.items() if k != 'payment_method'},
                 user=request.user if request.user.is_authenticated else None,
                 payment_method=method, currency=settings.PAYMENT_CURRENCY,
-                subtotal=subtotal, shipping_cost=shipping, total=subtotal + shipping)
-            for price, item in prices:
+                subtotal=subtotal, discount_amount=discount, voucher=voucher, shipping_cost=shipping, total=subtotal - discount + shipping)
+            if voucher:
+                Voucher.objects.filter(pk=voucher.pk).update(used_count=F("used_count") + 1)
+            for quote, item in prices:
                 OrderItem.objects.create(order=order, variant=item.variant, sku=item.variant.sku,
                     product_name=item.variant.product.name, size=item.variant.size, shade=item.variant.shade,
-                    quantity=item.quantity, unit_price=price, line_total=price * item.quantity)
+                    quantity=item.quantity, unit_price=quote['unit_price'], line_total=quote['line_total'])
                 Variant.objects.filter(pk=item.variant_id).update(stock=F('stock') - item.quantity)
             success = settings.PAYMENT_FRONTEND_URL + '/checkout/success?order=' + order.order_number
             cancel = settings.PAYMENT_FRONTEND_URL + '/cart'
@@ -99,13 +106,15 @@ def create_checkout(request, cart, data):
             cart.items.all().delete()
             result = OrderSerializer(order, context={'request': request}).data
             result['payment_url'] = url
+            if order.user_id is None:
+                result['guest_access_token'] = issue_token(order)
             return Response(result, status=201)
     except (stripe.StripeError, requests.RequestException, ValueError, KeyError):
         return Response({'error': 'Payment provider unavailable. Your basket was retained.'}, status=502)
 
 
 @transaction.atomic
-def settle(number, reference, paid, amount=None, currency=None):
+def settle(number, reference, paid, amount=None, currency=None, payment_intent=None):
     order = Order.objects.select_for_update().filter(order_number=number, payment_reference=reference).first()
     if not order or order.status != 'pending':
         return
@@ -115,12 +124,16 @@ def settle(number, reference, paid, amount=None, currency=None):
         if Decimal(str(amount)) != order.total or currency.lower() != order.currency:
             return
         order.status = 'paid'
+        if payment_intent:
+            order.payment_intent_id = payment_intent
     else:
         for item in order.items.order_by('variant_id'):
             if item.variant_id:
                 Variant.objects.filter(pk=item.variant_id).update(stock=F('stock') + item.quantity)
         order.status = 'cancelled'
-    order.save(update_fields=['status', 'updated_at'])
+        if order.voucher_id:
+            Voucher.objects.filter(pk=order.voucher_id, used_count__gt=0).update(used_count=F('used_count') - 1)
+    order.save(update_fields=['status', 'payment_intent_id', 'updated_at'])
 
 
 @csrf_exempt
@@ -136,10 +149,13 @@ def stripe_webhook(request):
         return HttpResponse(status=400)
     obj = event['data']['object']
     kind = event['type']
-    if kind in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
+    if kind in ['refund.created', 'refund.updated', 'refund.failed']:
+        from fulfillment.refunds import handle_refund_event
+        handle_refund_event(obj)
+    elif kind in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
         if obj.get('payment_status') == 'paid':
             settle(obj.get('client_reference_id'), obj['id'], True,
-                   Decimal(obj['amount_total']) / 100, obj['currency'])
+                   Decimal(obj['amount_total']) / 100, obj['currency'], payment_intent=obj.get('payment_intent'))
     elif kind in ('checkout.session.expired', 'checkout.session.async_payment_failed'):
         settle(obj.get('client_reference_id'), obj['id'], False)
     return HttpResponse(status=200)

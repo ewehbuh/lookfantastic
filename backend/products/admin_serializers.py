@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
-from .models import Product, Category, Brand, ProductImage, Variant, Offer
+from .models import Product, Category, Brand, ProductImage, Variant, Offer, ProductOffer
 
 class AdminProductSerializer(serializers.ModelSerializer):
     brand = serializers.PrimaryKeyRelatedField(queryset=Brand.objects.all())
@@ -102,7 +102,7 @@ class AdminOfferSerializer(serializers.ModelSerializer):
         model = Offer
         fields = [
             'id', 'name', 'slug', 'offer_type', 'value',
-            'valid_from', 'valid_to', 'is_active',
+            'valid_from', 'valid_to', 'is_active', 'buy_quantity', 'free_quantity',
             'products', 'categories', 'brands'
         ]
 
@@ -116,7 +116,9 @@ class AdminOfferSerializer(serializers.ModelSerializer):
         if value is not None and (value < 0 or kind == 'percentage' and value > 100):
             raise serializers.ValidationError({'value': 'Use a nonnegative amount or a percentage from 0 to 100.'})
         if kind == 'buy_x_get_y':
-            raise serializers.ValidationError({'offer_type': 'Buy-X-get-Y pricing is not implemented.'})
+            for key in ['buy_quantity', 'free_quantity']:
+                if attrs.get(key, getattr(self.instance, key, 1)) < 1:
+                    raise serializers.ValidationError({key: 'Quantity must be at least one.'})
         return attrs
 
     @transaction.atomic
@@ -157,3 +159,18 @@ class AdminProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductImage
         fields = ['id', 'product', 'image', 'alt_text', 'order']
+
+
+class AdminProductOfferSerializer(serializers.ModelSerializer):
+    additional_value = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, allow_null=True, required=False)
+
+    class Meta:
+        model = ProductOffer
+        fields = ['id', 'product', 'offer', 'additional_value']
+
+    def validate(self, attrs):
+        offer = attrs.get('offer', getattr(self.instance, 'offer', None))
+        value = attrs.get('additional_value', getattr(self.instance, 'additional_value', None))
+        if value is not None and offer.offer_type == 'percentage' and value > 100:
+            raise serializers.ValidationError({'additional_value': 'Percentage cannot exceed 100.'})
+        return attrs

@@ -91,10 +91,17 @@ class Product(models.Model):
 
     @property
     def on_offer(self):
-        from django.utils import timezone
-        now = timezone.now()
-        return self.offers.filter(is_active=True, valid_from__lte=now, valid_to__gte=now,
-                                  offer_type__in=['fixed', 'percentage']).exists()
+        from .promotions import applicable_offers
+        return applicable_offers(self).exists()
+
+    @property
+    def rating_average(self):
+        from django.db.models import Avg
+        return self.reviews.filter(is_approved=True).aggregate(value=Avg('rating'))['value']
+
+    @property
+    def review_count(self):
+        return self.reviews.filter(is_approved=True).count()
 
 
 class Variant(models.Model):
@@ -131,6 +138,8 @@ class Offer(models.Model):
     slug = models.SlugField(max_length=120, unique=True)
     offer_type = models.CharField(max_length=20, choices=OFFER_TYPE_CHOICES)
     value = models.DecimalField(max_digits=10, decimal_places=2, help_text="Percentage or fixed amount")
+    buy_quantity = models.PositiveIntegerField(default=1)
+    free_quantity = models.PositiveIntegerField(default=1)
     valid_from = models.DateTimeField()
     valid_to = models.DateTimeField()
     is_active = models.BooleanField(default=True)
@@ -163,3 +172,19 @@ class ProductImage(models.Model):
 
     def __str__(self):
         return f"Image for {self.product.name}"
+
+
+class Review(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
+    user = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE)
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)])
+    title = models.CharField(max_length=200)
+    body = models.TextField(max_length=5000)
+    is_approved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-pk']
+        constraints = [models.UniqueConstraint(fields=['user', 'product'], name='review_one_per_user_product'),
+                       models.CheckConstraint(condition=models.Q(rating__gte=1, rating__lte=5), name='review_rating_1_to_5')]

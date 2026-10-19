@@ -6,11 +6,18 @@ from .admin_views import (
     AdminVariantViewSet, AdminOfferViewSet
 )
 
+from .reviews import ReviewViewSet, AdminReviewViewSet
+from .admin_views import AdminProductOfferViewSet
+
 router = DefaultRouter()
 # Public (read-only)
 router.register(r'products', ProductViewSet, basename='product')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'brands', BrandViewSet, basename='brand')
+
+router.register('reviews', ReviewViewSet, basename='review')
+router.register('admin/reviews', AdminReviewViewSet, basename='admin-review')
+router.register('admin/product-offers', AdminProductOfferViewSet, basename='admin-product-offer')
 
 # Admin CRUD
 router.register(r'admin/products', AdminProductViewSet, basename='admin-product')

@@ -12,6 +12,7 @@ class Cart(models.Model):
     A shopping cart. Tied to a user (nullable for guests) or a session key.
     """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='carts')
+    voucher = models.ForeignKey('Voucher', on_delete=models.SET_NULL, null=True, blank=True)
     session_key = models.CharField(max_length=40, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -50,27 +51,17 @@ class CartItem(models.Model):
     @property
     def unit_price(self):
         """The effective price after any applicable offer."""
-        base_price = self.variant.price
-        # Check for active offers on the variant's product
-        now = timezone.now()
-        active_offers = self.variant.product.offers.filter(
-            is_active=True,
-            valid_from__lte=now,
-            valid_to__gte=now
-        )
-        best_price = base_price
-        for offer in active_offers:
-            if offer.offer_type == 'percentage':
-                discounted = base_price * (1 - offer.value / 100)
-                best_price = min(best_price, discounted)
-            elif offer.offer_type == 'fixed':
-                discounted = base_price - offer.value
-                best_price = min(best_price, max(discounted, 0))
-        return max(Decimal(best_price), Decimal("0.00")).quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
+        from products.promotions import quote_line
+        return quote_line(self.variant, self.quantity)['unit_price']
 
     @property
     def line_total(self):
-        return self.unit_price * self.quantity
+        from products.promotions import quote_line
+        return quote_line(self.variant, self.quantity)['line_total']
+
+    @property
+    def promotion_discount(self):
+        return self.variant.price * self.quantity - self.line_total
 
 
 class Order(models.Model):
@@ -83,6 +74,7 @@ class Order(models.Model):
         ('processing', 'Processing'),
         ('shipped', 'Shipped'),
         ('cancelled', 'Cancelled'),
+        ('refunded', 'Refunded'),
     ]
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     email = models.EmailField()
@@ -93,6 +85,9 @@ class Order(models.Model):
     shipping_city = models.CharField(max_length=100)
     shipping_postcode = models.CharField(max_length=20)
     shipping_country = models.CharField(max_length=100)
+    voucher = models.ForeignKey('Voucher', on_delete=models.PROTECT, null=True, blank=True)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2)
@@ -125,3 +120,28 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product_name}"
+
+
+class Voucher(models.Model):
+    code = models.CharField(max_length=40, unique=True)
+    kind = models.CharField(max_length=12, choices=[('percentage', 'Percentage'), ('fixed', 'Fixed')])
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    min_subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    valid_from = models.DateTimeField()
+    valid_to = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    max_uses = models.PositiveIntegerField(null=True, blank=True)
+    used_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['code']
+
+    def save(self, *args, **kwargs):
+        self.code = self.code.strip().upper()
+        super().save(*args, **kwargs)
+
+
+class OrderAccessToken(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='access_tokens')
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()

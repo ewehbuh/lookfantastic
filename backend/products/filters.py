@@ -107,13 +107,8 @@ class ProductFilter(django_filters.FilterSet):
         return queryset.filter(Exists(variants))
 
     def filter_on_offer(self, queryset, name, value):
-        from django.utils import timezone
-        now = timezone.now()
-        condition = Q(offers__is_active=True, offers__valid_from__lte=now,
-                      offers__valid_to__gte=now, offers__offer_type__in=['fixed', 'percentage'])
-        if value:
-            return queryset.filter(condition).distinct()
-        return queryset.exclude(pk__in=queryset.filter(condition).values('pk'))
+        from .promotions import filter_on_offer
+        return filter_on_offer(queryset, value)
 
     def filter_search(self, queryset, name, value):
         return queryset.filter(

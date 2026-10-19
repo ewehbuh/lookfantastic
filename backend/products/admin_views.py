@@ -46,3 +46,13 @@ class AdminProductImageViewSet(viewsets.ModelViewSet):
     queryset = ProductImage.objects.all()
     serializer_class = AdminProductImageSerializer
     http_method_names = ['get', 'post', 'delete', 'head', 'options']   # no PUT/PATCH
+
+
+from .models import ProductOffer
+from .admin_serializers import AdminProductOfferSerializer
+
+
+class AdminProductOfferViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAdminUser]
+    queryset = ProductOffer.objects.all().order_by('pk')
+    serializer_class = AdminProductOfferSerializer
