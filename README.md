@@ -144,3 +144,30 @@ Allow outbound HTTPS to `oauth2.googleapis.com` (code exchange) and
 browser authorization destination. Local tests mock Google exchange; additional RSA
 fixtures exercise real signature/audience/issuer/expiry rejection. Live OAuth remains
 unverified until real web-client credentials and a frontend callback are configured.
+
+## Product catalogue checks
+
+Run `python manage.py test products accounts cart` from `backend`. Product checks
+cover public catalogue/detail pages, exact slug lookup, category paths, brand/search
+filters, price ranges/sorting, pagination/facets, active variants, offers, confirmed
+sales ranking, staff permissions and category moves.
+
+Public product visibility requires an active product and brand, plus an active
+category ancestry (uncategorised active products remain visible). Category and brand
+product endpoints now use the same validated filters and paginated response with
+facets as `/api/products/`. Price ranges require one active SKU satisfying both
+bounds; sorting by `price` uses the cheapest active SKU and never duplicates products.
+`ordering=-created_at` remains supported alongside `newest`, `price` and `name` aliases.
+Bestsellers now come from paid/processing/shipped order quantities and are empty when
+no confirmed sales exist. Pending/cancelled orders do not contribute.
+
+Admin category PATCH preserves the parent unless `parent_id` is explicitly supplied;
+null promotes a node to root. Self/descendant parenting is rejected. Negative SKU
+prices, reference prices below selling prices, invalid offer dates and percentages
+outside 0–100 are rejected. Existing records are not rewritten by these checks.
+
+Discount support remains limited to directly assigned percentage/fixed product
+offers. Category/brand offer targeting and per-product override values are not
+implemented in basket pricing; buy-X-get-Y configuration is explicitly rejected by
+the product management API until its pricing rules are implemented. These limitations
+must be addressed before using those promotion types commercially.

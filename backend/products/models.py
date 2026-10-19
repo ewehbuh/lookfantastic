@@ -87,8 +87,14 @@ class Product(models.Model):
 
     @property
     def in_stock(self):
-        variant = self.default_variant
-        return variant.stock > 0 if variant else False
+        return self.variants.filter(is_active=True, stock__gt=0).exists()
+
+    @property
+    def on_offer(self):
+        from django.utils import timezone
+        now = timezone.now()
+        return self.offers.filter(is_active=True, valid_from__lte=now, valid_to__gte=now,
+                                  offer_type__in=['fixed', 'percentage']).exists()
 
 
 class Variant(models.Model):

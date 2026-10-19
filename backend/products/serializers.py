@@ -68,7 +68,7 @@ class ProductListSerializer(serializers.ModelSerializer):
 class ProductDetailSerializer(serializers.ModelSerializer):
     brand = BrandSerializer(read_only=True)
     category = CategoryFlatSerializer(read_only=True)
-    variants = VariantSerializer(many=True, read_only=True)
+    variants = serializers.SerializerMethodField()
     images = ProductImageSerializer(many=True, read_only=True)
     offers = serializers.SerializerMethodField()
     default_variant = serializers.SerializerMethodField()
@@ -82,11 +82,15 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'meta_title', 'meta_description'
         ]
 
+    def get_variants(self, obj):
+        return VariantSerializer(obj.variants.filter(is_active=True), many=True, context=self.context).data
+
     def get_offers(self, obj):
         active_offers = obj.offers.filter(
             is_active=True,
             valid_from__lte=timezone.now(),
-            valid_to__gte=timezone.now()
+            valid_to__gte=timezone.now(),
+            offer_type__in=["fixed", "percentage"]
         )
         return OfferSerializer(active_offers, many=True).data
 

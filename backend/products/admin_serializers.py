@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import transaction
 from .models import Product, Category, Brand, ProductImage, Variant, Offer
 
 class AdminProductSerializer(serializers.ModelSerializer):
@@ -21,6 +22,15 @@ class AdminVariantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Variant
         fields = ['id', 'product', 'sku', 'size', 'shade', 'price', 'compare_at_price', 'stock', 'is_active']
+
+    def validate(self, attrs):
+        price = attrs.get('price', getattr(self.instance, 'price', None))
+        compare = attrs.get('compare_at_price', getattr(self.instance, 'compare_at_price', None))
+        if price is not None and price < 0:
+            raise serializers.ValidationError({'price': 'Price cannot be negative.'})
+        if compare is not None and (compare < 0 or price is not None and compare < price):
+            raise serializers.ValidationError({'compare_at_price': 'Reference price cannot be below the selling price.'})
+        return attrs
 
     def create(self, validated_data):
         # validated_data already contains 'product' as an instance, thanks to PrimaryKeyRelatedField
@@ -48,17 +58,28 @@ class AdminCategorySerializer(serializers.ModelSerializer):
             instance = Category.add_root(**validated_data)
         return instance
 
+    def validate(self, attrs):
+        parent = attrs.get('parent')
+        if self.instance and parent and (parent.pk == self.instance.pk or parent.is_descendant_of(self.instance)):
+            raise serializers.ValidationError({'parent_id': 'A category cannot be its own ancestor.'})
+        return attrs
+
+    @transaction.atomic
     def update(self, instance, validated_data):
+        supplied = 'parent' in validated_data
         parent = validated_data.pop('parent', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-
-        if parent and instance.get_parent() != parent:
-            instance.move(parent, pos='last-child')
-        elif parent is None and not instance.is_root():
-            instance.move(Category.get_first_root_node(), pos='left')
+        if supplied:
+            if parent and (instance.is_root() or instance.get_parent().pk != parent.pk):
+                instance.move(parent, pos='sorted-child')
+            elif parent is None and not instance.is_root():
+                instance.move(Category.get_first_root_node(), pos='sorted-sibling')
+        instance.refresh_from_db()
         return instance
+
+
 class AdminBrandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
@@ -85,6 +106,20 @@ class AdminOfferSerializer(serializers.ModelSerializer):
             'products', 'categories', 'brands'
         ]
 
+    def validate(self, attrs):
+        start = attrs.get('valid_from', getattr(self.instance, 'valid_from', None))
+        end = attrs.get('valid_to', getattr(self.instance, 'valid_to', None))
+        kind = attrs.get('offer_type', getattr(self.instance, 'offer_type', None))
+        value = attrs.get('value', getattr(self.instance, 'value', None))
+        if start and end and end <= start:
+            raise serializers.ValidationError({'valid_to': 'Offer must end after it starts.'})
+        if value is not None and (value < 0 or kind == 'percentage' and value > 100):
+            raise serializers.ValidationError({'value': 'Use a nonnegative amount or a percentage from 0 to 100.'})
+        if kind == 'buy_x_get_y':
+            raise serializers.ValidationError({'offer_type': 'Buy-X-get-Y pricing is not implemented.'})
+        return attrs
+
+    @transaction.atomic
     def create(self, validated_data):
         products = validated_data.pop('products', [])
         categories = validated_data.pop('categories', [])
@@ -99,6 +134,7 @@ class AdminOfferSerializer(serializers.ModelSerializer):
             offer.brands.set(brands)
         return offer
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         products = validated_data.pop('products', None)
         categories = validated_data.pop('categories', None)

@@ -1,9 +1,32 @@
 import django_filters
-from django.db.models import Q
+from django.db.models import Q, Exists, OuterRef, Subquery
+from django import forms
+from django.core.exceptions import ValidationError
+from .models import Variant
 from .models import Product, Category, Brand
 
 
+class PriceRangeForm(forms.Form):
+    def clean(self):
+        data = super().clean()
+        minimum, maximum = data.get('min_price'), data.get('max_price')
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValidationError('Minimum price cannot exceed maximum price.')
+        return data
+
+
+class CatalogueOrdering(django_filters.OrderingFilter):
+    def filter(self, qs, value):
+        if not value:
+            return qs
+        cheapest = Variant.objects.filter(product_id=OuterRef('pk'), is_active=True).order_by('price', 'pk')
+        qs = qs.annotate(catalogue_price=Subquery(cheapest.values('price')[:1]))
+        fields = [self.get_ordering_value(item) for item in value]
+        return qs.order_by(*fields, 'pk')
+
+
 class ProductFilter(django_filters.FilterSet):
+    slug = django_filters.CharFilter(field_name='slug', lookup_expr='exact')
     # Accept category slug as a string parameter (supports full paths like "skincare/moisturisers")
     category = django_filters.CharFilter(method='filter_category')
     brand = django_filters.ModelMultipleChoiceFilter(
@@ -16,10 +39,10 @@ class ProductFilter(django_filters.FilterSet):
     on_offer = django_filters.BooleanFilter(method='filter_on_offer')
     search = django_filters.CharFilter(method='filter_search')
 
-    ordering = django_filters.OrderingFilter(
+    ordering = CatalogueOrdering(
         fields=(
             ('created_at', 'newest'),
-            ('variants__price', 'price'),
+            ('catalogue_price', 'price'),
             ('name', 'name'),
         ),
         field_labels={
@@ -32,6 +55,15 @@ class ProductFilter(django_filters.FilterSet):
     class Meta:
         model = Product
         fields = []
+        form = PriceRangeForm
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.filters['ordering'].field
+        field.choices = [*field.choices, ('created_at', 'Created at'), ('-created_at', 'Newest first')]
+
+    def filter_queryset(self, queryset):
+        return super().filter_queryset(queryset).distinct()
 
     def filter_category(self, queryset, name, value):
         """
@@ -59,21 +91,29 @@ class ProductFilter(django_filters.FilterSet):
             return queryset.filter(category__in=descendants)
 
     def filter_min_price(self, queryset, name, value):
-        return queryset.filter(variants__price__gte=value, variants__is_active=True)
+        return self.filter_price_range(queryset)
 
     def filter_max_price(self, queryset, name, value):
-        return queryset.filter(variants__price__lte=value, variants__is_active=True)
+        return self.filter_price_range(queryset)
+
+    def filter_price_range(self, queryset):
+        # Both bounds must match the SAME active SKU, without multiplying products.
+        variants = Variant.objects.filter(product_id=OuterRef('pk'), is_active=True)
+        data = self.form.cleaned_data
+        if data.get('min_price') is not None:
+            variants = variants.filter(price__gte=data['min_price'])
+        if data.get('max_price') is not None:
+            variants = variants.filter(price__lte=data['max_price'])
+        return queryset.filter(Exists(variants))
 
     def filter_on_offer(self, queryset, name, value):
         from django.utils import timezone
         now = timezone.now()
+        condition = Q(offers__is_active=True, offers__valid_from__lte=now,
+                      offers__valid_to__gte=now, offers__offer_type__in=['fixed', 'percentage'])
         if value:
-            return queryset.filter(
-                offers__is_active=True,
-                offers__valid_from__lte=now,
-                offers__valid_to__gte=now
-            ).distinct()
-        return queryset
+            return queryset.filter(condition).distinct()
+        return queryset.exclude(pk__in=queryset.filter(condition).values('pk'))
 
     def filter_search(self, queryset, name, value):
         return queryset.filter(
