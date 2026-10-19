@@ -94,6 +94,9 @@ class Order(models.Model):
     payment_method = models.CharField(max_length=20, default="stripe")
     payment_reference = models.CharField(max_length=255, blank=True)
     currency = models.CharField(max_length=3, default="gbp")
+    base_currency = models.CharField(max_length=3, default="gbp")
+    exchange_rate = models.DecimalField(max_digits=20, decimal_places=10, default=1)
+    exchange_rate_at = models.DateTimeField(null=True, blank=True)
     payment_intent_id = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -145,3 +148,17 @@ class OrderAccessToken(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='access_tokens')
     token_hash = models.CharField(max_length=64, unique=True)
     expires_at = models.DateTimeField()
+
+
+class ExchangeRate(models.Model):
+    """One unit of base currency buys `rate` units of quote currency."""
+    base_currency = models.CharField(max_length=3)
+    currency = models.CharField(max_length=3)
+    rate = models.DecimalField(max_digits=20, decimal_places=10)
+    as_of = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['base_currency', 'currency'], name='unique_exchange_pair'),
+            models.CheckConstraint(condition=models.Q(rate__gt=0), name='positive_exchange_rate'),
+        ]

@@ -105,6 +105,14 @@ class CartViewSet(viewsets.GenericViewSet):
             cart.save(update_fields=['voucher'])
         return Response(CartSerializer(cart, context={'request': request}).data)
 
+    @action(detail=False, methods=['get'])
+    def quote(self, request):
+        from .currency import price_quote
+        result = price_quote(get_or_create_cart(request), request.query_params.get('currency'))
+        response = Response(result)
+        response['Cache-Control'] = 'no-store'
+        return response
+
     @action(detail=False, methods=['post'])
     def checkout(self, request):
         cart = get_or_create_cart(request)

@@ -90,12 +90,18 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'status', 'shipping_name', 'shipping_address',
             'shipping_city', 'shipping_postcode', 'shipping_country',
-            'subtotal', 'discount_amount', 'refunded_amount', 'shipping_cost', 'total', 'items', 'shipments', 'returns', 'refunds', 'created_at', 'payment_method', 'currency'
+            'subtotal', 'discount_amount', 'refunded_amount', 'shipping_cost', 'total', 'items', 'shipments', 'returns', 'refunds', 'created_at', 'payment_method', 'currency', 'base_currency', 'exchange_rate', 'exchange_rate_at'
         ]
 
 
 class CheckoutSerializer(serializers.Serializer):
     """Data required to finalise the order."""
+    currency = serializers.CharField(required=False, max_length=3)
+
+    def validate_currency(self, value):
+        from .currency import currency_code
+        return currency_code(value)
+
     address_id = serializers.IntegerField(min_value=1, required=False, write_only=True)
     email = serializers.EmailField()
     shipping_name = serializers.CharField(max_length=100, required=False)

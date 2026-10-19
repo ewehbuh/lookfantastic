@@ -188,3 +188,39 @@ New migrations create addresses, reviews, voucher/order-access data and fulfillm
 records. Existing orders retain zero discounts/refunds by default; no historic
 payments are inferred. Automatic recurring subscriptions, live provider credentials,
 production configuration and frontend integration remain separate work.
+
+
+## Currency conversion
+
+Catalogue prices, automatic promotions, fixed vouchers, minimum spend and shipping
+thresholds remain in the base `PAYMENT_CURRENCY` (default GBP). Do not change that
+setting to convert an existing catalogue. Supported currencies: GBP, EUR, USD,
+CAD, AUD, CHF, NZD, SGD, HKD; all use two decimal places.
+
+- `GET /api/currencies/` returns the base currency and usable exchange rates. Rates
+  mean quote-currency units per one base-currency unit. Missing/stale/future rates
+  are omitted. This endpoint does not call an external service.
+- Staff CRUD `/api/admin/exchange-rates/` accepts `base_currency`, `currency`,
+  `rate` (positive decimal), `as_of` (ISO timestamp). Example: GBP/USD at `1.25`.
+  Use a trusted rate source and refresh regularly. No automatic rate feed is
+  connected. `FX_MAX_AGE_SECONDS` defaults to 86400; expired rates block checkout.
+- `GET /api/cart/quote/?currency=usd` returns converted item unit/line amounts,
+  subtotal, voucher discount, shipping, total, currency, base currency and rate
+  timestamp. This is the checkout preview. Existing cart/catalogue responses
+  retain base prices for compatibility. Frontend can use the rate endpoint for
+  approximate catalogue display; basket quote is authoritative.
+- POST `/api/cart/checkout/` accepts optional `currency`, defaulting to base.
+  Checkout recalculates prices and FX server-side; client totals/rates are ignored.
+  It uses the current rate, so a preview can change before checkout. Frontend must
+  display the returned order total/currency before proceeding to hosted payment.
+- Round each converted line HALF_UP to cents, sum lines, convert voucher discount
+  and shipping separately, then calculate total. Line totals are authoritative;
+  quantity times rounded unit price may differ by a cent or include BOGO savings.
+- Orders and order items store converted amounts, currency and immutable-in-the-
+  checkout-flow base/rate/timestamp snapshots. Existing orders preserve their
+  original currency with rate 1. Provider settlement validates that saved amount
+  and currency. Refunds use the original charged currency, without recalculating FX.
+
+Provider/account/country restrictions still determine currency and payment-method
+eligibility. Unsupported currencies (including zero/three-decimal currencies) are
+rejected. The currency selector and converted-price UI require frontend integration.

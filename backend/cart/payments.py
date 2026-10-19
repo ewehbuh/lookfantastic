@@ -18,9 +18,8 @@ from rest_framework.response import Response
 from products.models import Variant
 from products.catalogue import visible_products
 from .models import Cart, Order, OrderItem, Voucher
-from products.promotions import quote_line
-from .vouchers import discount_for
 from .guest_orders import issue_token
+from .currency import price_quote
 from .serializers import OrderSerializer
 
 
@@ -54,23 +53,26 @@ def create_checkout(request, cart, data):
                 if not v or not v.is_active or item.quantity < 1 or v.stock < item.quantity:
                     return Response({'error': 'An item is unavailable or has insufficient stock.'}, status=400)
                 item.variant = v
-            prices = [(quote_line(i.variant, i.quantity), i) for i in items]
-            subtotal = sum((quote['line_total'] for quote, i in prices), Decimal('0.00'))
             voucher = Voucher.objects.select_for_update().filter(pk=cart.voucher_id).first() if cart.voucher_id else None
-            discount = discount_for(voucher, subtotal)
-            shipping = Decimal('0.00') if subtotal - discount >= 20 else Decimal('3.99')
-            if subtotal > Decimal('99999999.99') or subtotal - discount + shipping > Decimal('99999999.99'):
+            cart.voucher = voucher
+            quote = price_quote(cart, data.get('currency'))
+            subtotal, discount, shipping = quote['subtotal'], quote['discount_amount'], quote['shipping_cost']
+            if quote['total'] <= 0:
+                return Response({'error': 'Converted total is below the supported minimum.'}, status=400)
+            if any(value > Decimal('99999999.99') for value in [subtotal, quote['total'], *[i['unit_price'] for i in quote['items']]]):
                 return Response({'error': 'Order total exceeds the supported amount.'}, status=400)
-            order = Order.objects.create(**{k: v for k, v in data.items() if k != 'payment_method'},
+            order = Order.objects.create(**{k: v for k, v in data.items() if k not in ('payment_method', 'currency')},
                 user=request.user if request.user.is_authenticated else None,
-                payment_method=method, currency=settings.PAYMENT_CURRENCY,
+                payment_method=method, currency=quote['currency'], base_currency=quote['base_currency'],
+                exchange_rate=quote['exchange_rate'], exchange_rate_at=quote['exchange_rate_at'],
                 subtotal=subtotal, discount_amount=discount, voucher=voucher, shipping_cost=shipping, total=subtotal - discount + shipping)
             if voucher:
                 Voucher.objects.filter(pk=voucher.pk).update(used_count=F("used_count") + 1)
-            for quote, item in prices:
+            converted = {row['id']: row for row in quote['items']}
+            for item in items:
                 OrderItem.objects.create(order=order, variant=item.variant, sku=item.variant.sku,
                     product_name=item.variant.product.name, size=item.variant.size, shade=item.variant.shade,
-                    quantity=item.quantity, unit_price=quote['unit_price'], line_total=quote['line_total'])
+                    quantity=item.quantity, unit_price=converted[item.pk]['unit_price'], line_total=converted[item.pk]['line_total'])
                 Variant.objects.filter(pk=item.variant_id).update(stock=F('stock') - item.quantity)
             success = settings.PAYMENT_FRONTEND_URL + '/checkout/success?order=' + order.order_number
             cancel = settings.PAYMENT_FRONTEND_URL + '/cart'
