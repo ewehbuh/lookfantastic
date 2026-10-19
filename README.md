@@ -171,3 +171,31 @@ offers. Category/brand offer targeting and per-product override values are not
 implemented in basket pricing; buy-X-get-Y configuration is explicitly rejected by
 the product management API until its pricing rules are implemented. These limitations
 must be addressed before using those promotion types commercially.
+
+## Blog checks
+
+Run `python manage.py test blog products accounts cart` from `backend`. Blog checks
+cover publication timing, drafts/schedules, exact slug lookup, search, categories,
+pagination, related-product visibility, HTML sanitisation and staff CRUD permissions.
+Publication time is evaluated on every request, so scheduled posts appear without
+restarting the server. Articles in inactive editorial categories are hidden; articles
+without categories remain eligible. Publishing through the admin API assigns the
+current time if no publication time exists; explicit future schedules are preserved.
+New articles default to the authenticated editor as author.
+
+Canonical management URLs remain `/api/blog/admin/articles/` and
+`/api/blog/admin/categories/`. The supplied frontend's `/api/admin/articles/` is now
+a supported compatibility endpoint; it accepts `category_id` and returns the nested
+`category` object its editor expects. The canonical endpoint continues returning a
+numeric category ID. Both accept optional `related_products` IDs. Conflicting
+`category`/`category_id` input is rejected. `/api/admin/article-categories/` is the
+compatibility category endpoint, avoiding the existing product-category routes.
+
+Article body HTML is allowlisted on API writes and public reads (including legacy
+records). Scripts, event handlers, unsafe URL schemes and embedded active content
+are removed. Safe editorial formatting and links are retained. Existing stored
+records are not bulk-modified. Bodies are HTML; Markdown conversion is not provided.
+Related products use the same visibility rules as the public catalogue.
+
+Frontend work remains: the uploaded public blog listing renders empty links and needs
+article cards. That frontend source is not modified by these backend checks.
