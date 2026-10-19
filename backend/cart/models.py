@@ -1,12 +1,9 @@
 from django.utils import timezone
 
 from django.db import models
-
-# Create your models here.
-from django.db import models
 from django.conf import settings
-from products.models import Variant, Offer, ProductOffer
-from decimal import Decimal
+from products.models import Variant
+from decimal import Decimal, ROUND_HALF_UP
 import uuid
 
 
@@ -18,6 +15,10 @@ class Cart(models.Model):
     session_key = models.CharField(max_length=40, null=True, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user'], condition=models.Q(user__isnull=False),
+                                               name='cart_one_per_user')]
 
     def __str__(self):
         if self.user:
@@ -65,7 +66,7 @@ class CartItem(models.Model):
             elif offer.offer_type == 'fixed':
                 discounted = base_price - offer.value
                 best_price = min(best_price, max(discounted, 0))
-        return best_price
+        return max(Decimal(best_price), Decimal("0.00")).quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
 
     @property
     def line_total(self):

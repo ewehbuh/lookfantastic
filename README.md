@@ -252,3 +252,36 @@ The frontend still needs a search input and results page wired to this endpoint.
 Suggestions, typo correction, synonyms and relevance ranking are not implemented.
 Run `python manage.py test search subscriptions blog products accounts cart` for all
 current app checks.
+
+## Guest baskets and checkout regression checks
+
+Run `python manage.py test cart search subscriptions blog products accounts` from
+`backend`. Additional cart checks cover real login session rotation, guest/account
+isolation, stock-aware merging, invalid item/quantity inputs, discount rounding,
+owned order history, guest checkout and rejection of unavailable/oversized orders.
+
+Guest baskets use Django session cookies. Frontend Axios requests must set
+`withCredentials: true` (fetch: `credentials: 'include'`) and use a consistent backend
+hostname. Server-set guest basket markers survive login session rotation; the next
+basket request merges into the account basket once. Guest items no longer available
+are omitted and combined quantities are capped to stock, with adjustment messages
+in the additive `warnings` response field. Display those messages to shoppers. Older
+unmarked guest sessions must visit a basket endpoint before login to acquire markers.
+Logout starts an isolated guest session; it does not expose or delete the account cart.
+
+Cart writes and checkout share basket/SKU row locks. PostgreSQL is required for
+production concurrency guarantees; SQLite tests verify functional behaviour only.
+Apply migration `cart.0003` to enforce one cart per authenticated user. Deployments
+with duplicate user carts must resolve those duplicates before applying the unique
+constraint; this migration does not silently delete or combine existing user data.
+
+Add quantities default to one and must be whole numbers from 1–10,000; update requires
+an explicit quantity from 0–10,000, with zero removing the item. Input errors return
+400, while unavailable/missing variants and foreign item IDs return 404. Increases
+and checkout respect public catalogue visibility. Basket variants now include
+`product_name`. Discounted unit prices round half-up to two decimal places before
+multiplication, consistently in basket and checkout. Totals above the order model's
+supported maximum are rejected before a payment provider is called.
+
+Live payments, guest order-status retrieval and frontend payment/search wiring remain
+unverified or incomplete as described above. No real charges are made by these tests.

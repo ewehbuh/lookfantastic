@@ -16,6 +16,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from products.models import Variant
+from products.catalogue import visible_products
 from .models import Cart, Order, OrderItem
 from .serializers import OrderSerializer
 
@@ -44,15 +45,17 @@ def create_checkout(request, cart, data):
             if not items:
                 return Response({'error': 'Cart is empty.'}, status=400)
             variants = {v.pk: v for v in Variant.objects.select_for_update().filter(
-                pk__in=[i.variant_id for i in items]).order_by('pk')}
+                pk__in=[i.variant_id for i in items], product__in=visible_products()).order_by('pk')}
             for item in items:
-                v = variants[item.variant_id]
-                if not v.is_active or not v.product.is_active or v.stock < item.quantity:
+                v = variants.get(item.variant_id)
+                if not v or not v.is_active or item.quantity < 1 or v.stock < item.quantity:
                     return Response({'error': 'An item is unavailable or has insufficient stock.'}, status=400)
                 item.variant = v
             prices = [(i.unit_price.quantize(Decimal('.01'), rounding=ROUND_HALF_UP), i) for i in items]
             subtotal = sum((price * i.quantity for price, i in prices), Decimal('0.00'))
             shipping = Decimal('0.00') if subtotal >= 20 else Decimal('3.99')
+            if subtotal + shipping > Decimal('99999999.99'):
+                return Response({'error': 'Order total exceeds the supported amount.'}, status=400)
             order = Order.objects.create(**{k: v for k, v in data.items() if k != 'payment_method'},
                 user=request.user if request.user.is_authenticated else None,
                 payment_method=method, currency=settings.PAYMENT_CURRENCY,
