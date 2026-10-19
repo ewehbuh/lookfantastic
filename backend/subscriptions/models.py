@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-from decimal import Decimal
+from dateutil.relativedelta import relativedelta
 
 class SubscriptionPlan(models.Model):
     """
@@ -22,6 +22,17 @@ class SubscriptionPlan(models.Model):
     is_active = models.BooleanField(default=True)
     image = models.ImageField(upload_to='subscriptions/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def next_period(self, start):
+        if self.interval_count < 1:
+            raise ValueError('Plan interval count must be at least one.')
+        if self.interval == 'month':
+            return start + relativedelta(months=self.interval_count)
+        if self.interval == 'quarter':
+            return start + relativedelta(months=3 * self.interval_count)
+        if self.interval == 'year':
+            return start + relativedelta(years=self.interval_count)
+        raise ValueError('Unsupported plan interval.')
 
     def __str__(self):
         return f"{self.name} – {self.price} / {self.interval}"
@@ -55,8 +66,7 @@ class UserSubscription(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.current_period_end:
-            # Calculate end date based on interval
-            self.current_period_end = self.current_period_start + timezone.timedelta(days=30)
+            self.current_period_end = self.plan.next_period(self.current_period_start)
         if not self.next_billing_date:
             self.next_billing_date = self.current_period_end
         super().save(*args, **kwargs)

@@ -1,7 +1,13 @@
 from rest_framework import serializers
 from .models import SubscriptionPlan, UserSubscription, SubscriptionOrder
+from blog.content import clean_article_html
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    features = serializers.SerializerMethodField()
+
+    def get_features(self, obj):
+        return clean_article_html(obj.features)
+
     class Meta:
         model = SubscriptionPlan
         fields = ['id', 'name', 'slug', 'description', 'features', 'price', 'interval', 'interval_count', 'image', 'is_active']
@@ -25,5 +31,5 @@ class SubscriptionOrderSerializer(serializers.ModelSerializer):
 
 
 class SubscribeSerializer(serializers.Serializer):
-    plan_id = serializers.IntegerField(required=True)
+    plan_id = serializers.IntegerField(required=True, min_value=1)
     # Optional: payment nonce if integrating payment immediately

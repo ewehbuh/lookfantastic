@@ -199,3 +199,35 @@ Related products use the same visibility rules as the public catalogue.
 
 Frontend work remains: the uploaded public blog listing renders empty links and needs
 article cards. That frontend source is not modified by these backend checks.
+
+## Subscription checks
+
+Run `python manage.py test subscriptions blog products accounts cart` from `backend`.
+Subscription checks cover active plan visibility, personal subscriptions/history,
+calendar intervals (month/quarter/year and interval counts), cancellation, skipping,
+permissions, plan validation/deletion and disabled billing side effects.
+
+- Public plans remain paginated (`results`); `/my/` and `/my/history/` remain arrays.
+  Frontend plan rendering must consume `results`.
+- The frontend's `/api/admin/plans/` now aliases the canonical
+  `/api/subscriptions/admin/plans/` management routes. Negative prices and interval
+  counts below one are rejected. Referenced plan deletion returns 409; deactivate
+  plans instead to preserve subscription history. Features HTML is sanitised on API
+  writes/public reads using the editorial HTML policy.
+- Missing period-end dates use the actual plan interval and interval count, including
+  leap-year/month-end clipping. Existing explicit billing dates are preserved.
+  Skipping advances the local next billing date by one plan interval. Cancellation
+  supports active/paused subscriptions and is idempotent. Mutations lock subscription
+  rows within a transaction (use PostgreSQL for production concurrency guarantees).
+- Staff subscription APIs allow reads and limited PATCH updates for pause/cancellation.
+  They cannot create/reactivate subscriptions, rewrite billing dates or record paid
+  orders. Subscription-order APIs are read-only. History checks both the order owner
+  and subscription owner, including protection against inconsistent legacy records.
+
+Recurring billing is still **not integrated**. Subscribe returns 503 without creating
+subscriptions, orders or loyalty points, and the billing task remains a no-op. Stripe
+one-time checkout credentials do not enable recurring billing. Cancellation/skipping
+only changes local records and cannot cancel/reschedule an external provider's bills.
+Existing records are not migrated to Stripe. Hide new-subscription purchase actions
+until provider-backed subscription creation, billing webhooks, cancellation and
+schedule synchronisation are implemented and tested.
