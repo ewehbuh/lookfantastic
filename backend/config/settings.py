@@ -42,6 +42,7 @@ INSTALLED_APPS = [
        'rest_framework',
     'rest_framework.authtoken',            # dj-rest-auth uses this (optional but recommended)
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_filters',
     'treebeard',
@@ -67,8 +68,8 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -166,10 +167,9 @@ AUTH_USER_MODEL = 'accounts.CustomUser'
 
 # Allauth settings
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-ACCOUNT_AUTHENTICATION_METHOD = 'email'
-ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_UNIQUE_EMAIL = True
-ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_EMAIL_VERIFICATION = 'optional'  # change to 'mandatory' for production
 ACCOUNT_ADAPTER = 'accounts.adapters.CustomAccountAdapter'
 
@@ -180,6 +180,7 @@ REST_AUTH = {
     'PASSWORD_RESET_SERIALIZER': 'accounts.serializers.CustomPasswordResetSerializer',
     'USER_DETAILS_SERIALIZER': 'accounts.serializers.UserSerializer',   # ← add this
     'USE_JWT': True,
+    'OLD_PASSWORD_FIELD_ENABLED': True,
     'JWT_AUTH_COOKIE': 'access',
     'JWT_AUTH_REFRESH_COOKIE': 'refresh',
     'JWT_AUTH_HTTPONLY': True,
@@ -191,18 +192,20 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'USER_AUTHENTICATION_RULE': 'accounts.authentication.user_can_authenticate',
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 # Email
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # dev only
 DEFAULT_FROM_EMAIL = 'no-reply@lookfantastic.com'
-FRONTEND_URL = 'http://localhost:3000'
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        'accounts.authentication.AccountJWTAuthentication',
+        'accounts.authentication.AccountSessionAuthentication',
     ),
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

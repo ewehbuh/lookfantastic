@@ -84,3 +84,28 @@ billing is a separate integration; existing subscriptions are not migrated.
 bank method selection, crypto charge creation, invalid signatures, payment amount/
 currency/reference matching, delayed Stripe settlement and duplicate stock release.
 Provider calls are mocked; successful tests do not establish live payment readiness.
+
+## Accounts
+
+Run `python manage.py test accounts cart` from `backend` for account regression
+checks plus the payment regression suite. Run `python manage.py migrate` before
+startup; token blacklist migrations are now required.
+
+- Login returns an access JWT and an HttpOnly refresh cookie. Browser clients must
+  send credentials when using `/api/accounts/token/refresh/` and `/api/accounts/logout/`.
+  Refresh tokens rotate and are blacklisted after use/logout. Already issued access
+  tokens remain valid until expiry unless the account is deactivated or restricted.
+- Existing JWTs, refreshes and sessions reject banned/login-disabled accounts.
+- Password recovery uses `/api/accounts/password-reset/` (email), followed by
+  `/api/accounts/password-reset/confirm/` (`uid`, `token`, `new_password1`,
+  `new_password2`). Configure `FRONTEND_URL` for emailed frontend links. The frontend
+  reset page must read both query parameters and submit those fields. Delivery uses
+  the console email backend until SMTP is separately configured.
+- Email verification uses POST `/api/accounts/verify-email/` (`key`), or the emailed
+  confirmation page. Email verification remains optional, as in the supplied settings.
+- Wishlist and points lists remain paginated (`results`). Wishlist entries now embed
+  product data; create entries with `product_id`. Frontend list pages must consume
+  `results` rather than treating the entire response as an array.
+- Shopping wishlists/points feeds are personal, including staff accounts. Staff may
+  explicitly inspect a customer's balance with `?user_id=`. Only superusers may
+  change roles or modify existing staff/superuser accounts through the management API.

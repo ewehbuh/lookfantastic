@@ -1,14 +1,18 @@
-from rest_framework import viewsets, permissions, status
+from allauth.account.views import ConfirmEmailView
+from django.conf import settings
+from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from products.models import Product
-from .models import WishlistItem, PointTransaction
+from .models import WishlistItem, PointTransaction, UserProfile
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from django.db import IntegrityError, transaction
 from .serializers import (
     WishlistItemSerializer,
     PointTransactionSerializer,
     AdminUserSerializer,
+    UserSerializer,
 )
 
 User = get_user_model()
@@ -17,20 +21,17 @@ User = get_user_model()
 class WishlistViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = WishlistItemSerializer
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self):
-        # Staff/superusers can see all wishlist items
-        if self.request.user.is_staff:
-            return WishlistItem.objects.select_related('product').all()
-        return WishlistItem.objects.filter(user=self.request.user).select_related('product')
+        return WishlistItem.objects.filter(user=self.request.user).select_related('product__brand').prefetch_related('product__images')
 
     def perform_create(self, serializer):
-        product_id = self.request.data.get('product_id')
-        product = get_object_or_404(Product, pk=product_id, is_active=True)
-        if WishlistItem.objects.filter(user=self.request.user, product=product).exists():
-            from rest_framework import serializers as drf_serializers
-            raise drf_serializers.ValidationError("Already in wishlist.")
-        serializer.save(user=self.request.user, product=product)
+        try:
+            with transaction.atomic():
+                serializer.save(user=self.request.user)
+        except IntegrityError:
+            raise ValidationError({'product_id': 'Already in wishlist.'})
 
 
 class PointsViewSet(viewsets.ReadOnlyModelViewSet):
@@ -38,8 +39,6 @@ class PointsViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PointTransactionSerializer
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return PointTransaction.objects.all().order_by('-created_at')
         return PointTransaction.objects.filter(user=self.request.user).order_by('-created_at')
 
     @action(detail=False, methods=['get'])
@@ -47,13 +46,17 @@ class PointsViewSet(viewsets.ReadOnlyModelViewSet):
         # Admin can check any user's balance via ?user_id=...
         user_id = request.query_params.get('user_id')
         if user_id and request.user.is_staff:
+            try:
+                user_id = int(user_id)
+            except (ValueError, TypeError):
+                raise ValidationError({'user_id': 'A valid user ID is required.'})
             target_user = get_object_or_404(User, pk=user_id)
-            profile = target_user.profile
+            profile, _ = UserProfile.objects.get_or_create(user=target_user)
             return Response({
                 'user': target_user.email,
                 'total_points': profile.total_points,
             })
-        profile = request.user.profile
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
         return Response({'total_points': profile.total_points})
 
 
@@ -67,16 +70,22 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.select_related('profile').all()
     http_method_names = ['get', 'patch', 'head', 'options']  # no PUT, no POST
 
+    def perform_update(self, serializer):
+        actor = self.request.user
+        target = serializer.instance
+        if not actor.is_superuser:
+            if target.is_staff or target.is_superuser:
+                raise PermissionDenied('Only superusers can modify staff accounts.')
+            if {'is_staff', 'is_superuser'} & serializer.validated_data.keys():
+                raise PermissionDenied('Only superusers can change user roles.')
+        serializer.save()
+
     def get_serializer(self, *args, **kwargs):
         if self.action == 'partial_update':
             kwargs['partial'] = True
         return super().get_serializer(*args, **kwargs)
 
 
-    from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from .serializers import UserSerializer
 
 class UserViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -97,3 +106,15 @@ class UserViewSet(viewsets.GenericViewSet):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
+
+
+# The API project does not mount allauth's HTML login/signup routes, so use a
+# self-contained confirmation page rather than its entrance-page templates.
+class EmailConfirmationPage(ConfirmEmailView):
+    template_name = 'accounts/email_confirm.html'
+
+    def get_context_data(self, **kwargs):
+        return {'confirmation': self.object}
+
+    def get_redirect_url(self):
+        return settings.FRONTEND_URL.rstrip('/') + '/login'

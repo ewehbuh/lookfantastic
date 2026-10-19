@@ -6,10 +6,13 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from html import unescape
 from django.conf import settings
+from urllib.parse import urlencode
+from products.models import Product
+from products.serializers import ProductListSerializer
 from allauth.account.utils import filter_users_by_email, user_email, user_pk_to_url_str
 from allauth.account.forms import default_token_generator
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import UserProfile, WishlistItem, PointTransaction
 
@@ -39,25 +42,6 @@ class CustomRegisterSerializer(RegisterSerializer):
         user = super().save(request)
         UserProfile.objects.get_or_create(user=user)
         return user
-
-
-# ---------- Login (with JWT tokens) ----------
-# class CustomLoginSerializer(LoginSerializer):
-#     def validate(self, attrs):
-#         data = super().validate(attrs)
-#         user = data['user']
-#         from django.utils import timezone
-#         if user.is_banned:
-#             raise serializers.ValidationError("Your account has been suspended.")
-#         if user.banned_until and user.banned_until > timezone.now():
-#             raise serializers.ValidationError("Your account is temporarily suspended.")
-#         if user.login_disabled:
-#             raise serializers.ValidationError("Login is disabled for your account.")
-
-#         refresh = RefreshToken.for_user(user)
-#         data['access'] = str(refresh.access_token)
-#         data['refresh'] = str(refresh)
-#         return data
 
 
 # ---------- User Serializer (regular user) ----------
@@ -92,15 +76,6 @@ class CustomLoginSerializer(LoginSerializer):
         if user.login_disabled:
             raise serializers.ValidationError("Login is disabled for your account.")
 
-        # Add JWT tokens
-        refresh = RefreshToken.for_user(user)
-        data['access'] = str(refresh.access_token)
-        data['refresh'] = str(refresh)
-
-        # ---- Add role fields directly to the response ----
-        data['is_staff'] = user.is_staff
-        data['is_superuser'] = user.is_superuser
-
         return data
 
 # ---------- Password Reset ----------
@@ -108,14 +83,15 @@ class CustomPasswordResetSerializer(PasswordResetSerializer):
     def save(self):
         request = self.context.get('request')
         email = self.validated_data['email']
-        users = filter_users_by_email(email)
+        users = [user for user in filter_users_by_email(email)
+                 if user.is_active and user.has_usable_password()]
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
         current_site = get_current_site(request)
 
         for user in users:
             uid = user_pk_to_url_str(user)
             token = default_token_generator.make_token(user)
-            reset_link = f"{frontend_url}auth/reset-password/{uid}/{token}/"
+            reset_link = frontend_url.rstrip("/") + "/reset-password?" + urlencode({"uid": uid, "token": token})
 
             context = {
                 'user': user,
@@ -126,9 +102,9 @@ class CustomPasswordResetSerializer(PasswordResetSerializer):
                 'site_domain': current_site.domain,
                 'protocol': 'https' if request.is_secure() else 'http',
             }
-            subject = render_to_string('account/email/password_reset_key_subject.txt', context).strip()
-            html_message = render_to_string('account/email/password_reset_key_message.html', context)
-            plain_message = strip_tags(html_message)
+            subject = render_to_string('accounts/email/password_reset_key_subject.txt', context).strip()
+            html_message = render_to_string('accounts/email/password_reset_key_message.html', context)
+            plain_message = unescape(strip_tags(html_message))
             send_mail(
                 subject,
                 plain_message,
@@ -141,10 +117,12 @@ class CustomPasswordResetSerializer(PasswordResetSerializer):
 
 # ---------- Wishlist ----------
 class WishlistItemSerializer(serializers.ModelSerializer):
-    product = serializers.PrimaryKeyRelatedField(read_only=True)
+    product = ProductListSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.filter(is_active=True), source="product", write_only=True)
     class Meta:
         model = WishlistItem
-        fields = ['id', 'product', 'added_at']
+        fields = ['id', 'product', 'product_id', 'added_at']
 
 
 # ---------- Points ----------
