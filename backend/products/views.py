@@ -95,8 +95,9 @@ class BrandViewSet(viewsets.ReadOnlyModelViewSet):
         return product_list_response(self, request, visible_products().filter(brand=brand))
 
 
-def product_list_response(view, request, queryset):
-    filters = ProductFilter(request.query_params, queryset=queryset, request=request)
+def product_list_response(view, request, queryset, filter_params=None):
+    params = request.query_params if filter_params is None else filter_params
+    filters = ProductFilter(params, queryset=queryset, request=request)
     if not filters.is_valid():
         raise ValidationError(filters.errors)
     queryset = filters.qs

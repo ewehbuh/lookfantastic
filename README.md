@@ -231,3 +231,24 @@ only changes local records and cannot cancel/reschedule an external provider's b
 Existing records are not migrated to Stripe. Hide new-subscription purchase actions
 until provider-backed subscription creation, billing webhooks, cancellation and
 schedule synchronisation are implemented and tested.
+
+## Product search
+
+The formerly empty search app now exposes read-only `GET /api/search/?q=night+cream`.
+Use `search=` as a compatibility alias; do not send conflicting or repeated queries.
+The query is required, limited to 200 characters and ten terms, with whitespace
+normalised. Every term must match a product's name, brand, description or active SKU.
+Matching uses database case-insensitive substring lookups, not fuzzy/relevance search.
+No external search service or credentials are required.
+
+The endpoint shares catalogue visibility, brand/category paths, price ranges, offer
+filters and sorting. Results include `query`, `results`, `facets`, `count`, `next` and
+`previous`; pagination uses the existing 24-product page size. SKU matches preserve
+product-level price facets and do not duplicate products. Empty matches return a
+normal empty result set; missing/invalid queries or filters return 400.
+
+Example: `/api/search/?q=night&category=skincare&max_price=30&ordering=price`.
+The frontend still needs a search input and results page wired to this endpoint.
+Suggestions, typo correction, synonyms and relevance ranking are not implemented.
+Run `python manage.py test search subscriptions blog products accounts cart` for all
+current app checks.
