@@ -5,6 +5,8 @@ from dj_rest_auth.views import LoginView, LogoutView, PasswordChangeView, Passwo
 from dj_rest_auth.jwt_auth import get_refresh_view
 from .views import UserViewSet, WishlistViewSet, PointsViewSet, AdminUserViewSet, EmailConfirmationPage
 
+from .google_login import providers, start as google_start, GoogleLoginView
+
 router = DefaultRouter()
 router.register(r'wishlist', WishlistViewSet, basename='wishlist')
 router.register(r'points', PointsViewSet, basename='points')
@@ -12,6 +14,9 @@ router.register(r'admin/users', AdminUserViewSet, basename='admin-user')
 # router.register(r'user', UserViewSet, basename='user')
 
 urlpatterns = [
+    path("auth/providers/", providers),
+    path("google/start/", google_start),
+    path("google/", GoogleLoginView.as_view()),
     # Registration
     path('register/', RegisterView.as_view(), name='rest_register'),
     path('verify-email/', VerifyEmailView.as_view(), name='rest_verify_email'),

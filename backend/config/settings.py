@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'dj_rest_auth',
     'dj_rest_auth.registration',
       'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
 
 
 
@@ -220,3 +221,8 @@ COINBASE_COMMERCE_API_KEY = os.environ.get("COINBASE_COMMERCE_API_KEY", "")
 COINBASE_COMMERCE_WEBHOOK_SECRET = os.environ.get("COINBASE_COMMERCE_WEBHOOK_SECRET", "")
 STRIPE_BANK_PAYMENT_METHOD_TYPES = [value.strip() for value in os.environ.get(
     "STRIPE_BANK_PAYMENT_METHOD_TYPES", "").split(",") if value.strip()]
+
+# Google web OAuth credentials (service-account credentials are not interchangeable).
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '')
+GOOGLE_OAUTH_REDIRECT_URI = os.environ.get('GOOGLE_OAUTH_REDIRECT_URI', '')

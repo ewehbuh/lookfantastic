@@ -109,3 +109,38 @@ startup; token blacklist migrations are now required.
 - Shopping wishlists/points feeds are personal, including staff accounts. Staff may
   explicitly inspect a customer's balance with `?user_id=`. Only superusers may
   change roles or modify existing staff/superuser accounts through the management API.
+
+## Conditional Google login
+
+Google login stays disabled unless `GOOGLE_OAUTH_CLIENT_ID`,
+`GOOGLE_OAUTH_CLIENT_SECRET` and a valid `GOOGLE_OAUTH_REDIRECT_URI` are present.
+Use Google Cloud's **web application OAuth client**, not service-account credentials.
+The redirect must be HTTPS (HTTP is allowed only for localhost/127.0.0.1 development).
+Register that exact URI in Google Cloud Console, configure the consent screen/test
+users as required, and inject the client secret securely. Changes require an app restart.
+
+Frontend wiring (not included in this backend change):
+
+1. GET `/api/accounts/auth/providers/`; show Google login only if `google.enabled`.
+2. GET `/api/accounts/google/start/` with browser credentials, then navigate to
+   `authorization_url`. This sets a session-bound state, nonce and PKCE verifier.
+3. At the configured frontend callback, handle provider cancellation/error; otherwise
+   POST `{code, state}` to `/api/accounts/google/` with the same browser's session
+   cookies. Use `credentials: 'include'` (Axios: `withCredentials: true`) on both calls.
+   Remove OAuth query parameters from browser history after handling the response.
+4. On success, use the returned access JWT and HttpOnly refresh cookie exactly as
+   for password login. A missing configuration returns 503; invalid or expired
+   attempts return 400 and must restart the flow. Attempts expire after ten minutes.
+
+For cross-site deployments configure allowed frontend origins, secure cookies and
+appropriate session SameSite settings; do not weaken OAuth state verification.
+Signature, issuer, audience, expiry, nonce and verified-email checks are mandatory.
+Accounts are identified by Google's subject ID. Existing password accounts are not
+automatically linked by email. Explicit authenticated account linking is not implemented.
+Restricted accounts cannot use Google login. No Google tokens are stored.
+
+Allow outbound HTTPS to `oauth2.googleapis.com` (code exchange) and
+`www.googleapis.com` (Google signing certificates). `accounts.google.com` is the
+browser authorization destination. Local tests mock Google exchange; additional RSA
+fixtures exercise real signature/audience/issuer/expiry rejection. Live OAuth remains
+unverified until real web-client credentials and a frontend callback are configured.
