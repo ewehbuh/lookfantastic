@@ -231,4 +231,4 @@ GOOGLE_OAUTH_REDIRECT_URI = os.environ.get('GOOGLE_OAUTH_REDIRECT_URI', '')
 RETURNS_WINDOW_DAYS = int(os.environ.get("RETURNS_WINDOW_DAYS", "30"))
 
 # Rates older than this are rejected for quotes and checkout.
-FX_MAX_AGE_SECONDS = int(os.environ.get("FX_MAX_AGE_SECONDS", "86400"))
+FX_MAX_AGE_SECONDS = int(os.environ.get("FX_MAX_AGE_SECONDS", "345600"))

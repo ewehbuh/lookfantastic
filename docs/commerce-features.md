@@ -202,8 +202,9 @@ CAD, AUD, CHF, NZD, SGD, HKD; all use two decimal places.
   are omitted. This endpoint does not call an external service.
 - Staff CRUD `/api/admin/exchange-rates/` accepts `base_currency`, `currency`,
   `rate` (positive decimal), `as_of` (ISO timestamp). Example: GBP/USD at `1.25`.
-  Use a trusted rate source and refresh regularly. No automatic rate feed is
-  connected. `FX_MAX_AGE_SECONDS` defaults to 86400; expired rates block checkout.
+  Manual updates remain supported. The automatic refresh command below imports
+  daily reference rates. `FX_MAX_AGE_SECONDS` defaults to 345600 (four days) to
+  accommodate weekends and short bank holidays; expired rates block checkout.
 - `GET /api/cart/quote/?currency=usd` returns converted item unit/line amounts,
   subtotal, voucher discount, shipping, total, currency, base currency and rate
   timestamp. This is the checkout preview. Existing cart/catalogue responses
@@ -224,3 +225,29 @@ CAD, AUD, CHF, NZD, SGD, HKD; all use two decimal places.
 Provider/account/country restrictions still determine currency and payment-method
 eligibility. Unsupported currencies (including zero/three-decimal currencies) are
 rejected. The currency selector and converted-price UI require frontend integration.
+
+
+### Automatic exchange-rate refresh
+
+Run `python backend/manage.py refresh_exchange_rates` from the repository root
+with the application environment and virtualenv. It fetches the public HTTPS
+Frankfurter v1 daily reference-rate feed at `api.frankfurter.dev`; no API key is
+required. These are reference rates, not a guarantee of bank/provider FX pricing.
+The provider base, amount, date, complete currency set, finite positive rates and
+model precision are validated before any writes. Network/invalid-data failures
+exit nonzero and retain existing rows. Newer staff rates are preserved. The source
+publication date is stored at UTC midnight; repeated fetches never extend expiry.
+
+For production, run once at deployment and install the hourly entry from
+`deploy/exchange-rates.cron` in your application user's crontab, adapting paths and
+supplying the same database/settings environment as the web application. Use
+one scheduler, monitor command failures, and ensure outbound HTTPS access to
+`api.frankfurter.dev`. The checked-in schedule is a deployment template; committing
+it does not install cron or start a scheduler. The application does not fetch rates
+inside requests. A broker/Celery worker is not required. No new Python dependencies
+or migrations are needed for this refresh command.
+
+Daily rates may remain unchanged over weekends/holidays. Four days is the default
+expiry limit; longer provider interruptions still disable affected currencies.
+Setting `FX_MAX_AGE_SECONDS` lower is supported but may disable conversion during
+weekends. Existing environment overrides are not automatically changed by deployment.
