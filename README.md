@@ -1,10 +1,15 @@
-# Lookfantastic backend
+# Lookfantastic
 
 Django backend imported from the supplied source archive, with Stripe hosted checkout
 and Coinbase Commerce hosted crypto charges. No production credentials are included.
 The supplied database, media, caches and original development secret are excluded.
 
-## Development
+## Frontend
+
+The Next.js frontend lives in `frontend/`. See [frontend setup and architecture](frontend/README.md)
+for commands, feature boundaries and current integration limitations.
+
+## Backend development
 
 Use the existing checkout; cloud tasks are already isolated and need no worktree.
 

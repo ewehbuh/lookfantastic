@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import apiClient from '@/lib/api-client';
+import { Link } from '@/i18n/navigation';
+import apiClient from '@/lib/api/client';
 
 interface ApiCategory {
   id: number;

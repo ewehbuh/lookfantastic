@@ -1,11 +1,9 @@
 import type { Metadata } from 'next';
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
-import { Providers } from './providers';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import PromoBanner from '@/components/layout/PromoBanner';
-import CartDrawer from '@/components/cart/CartDrawer';
+import { hasLocale, NextIntlClientProvider } from 'next-intl';
+import { getMessages, setRequestLocale } from 'next-intl/server';
+import { notFound } from 'next/navigation';
+import { routing } from '@/i18n/routing';
+import { Providers } from '@/providers/app-providers';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
@@ -13,28 +11,19 @@ export const metadata: Metadata = {
   description: 'Beauty products online',
 };
 
-export default async function LocaleLayout({
-  children,
-  params,
-}: {
+export default async function LocaleLayout({children, params}: {
   children: React.ReactNode;
-  params: Promise<{ locale: string }>;   // params is now a Promise
+  params: Promise<{locale: string}>;
 }) {
-  const { locale } = await params;        // await it
-
-  const messages = await getMessages({ locale });
-
+  const {locale} = await params;
+  if (!hasLocale(routing.locales, locale)) notFound();
+  setRequestLocale(locale);
+  const messages = await getMessages();
   return (
     <html lang={locale}>
       <body>
-        <NextIntlClientProvider messages={messages} locale={locale}>
-          <Providers>
-            <PromoBanner />
-            <Header />
-            <main className="min-h-screen">{children}</main>
-            <Footer />
-            <CartDrawer />
-          </Providers>
+        <NextIntlClientProvider messages={messages}>
+          <Providers>{children}</Providers>
         </NextIntlClientProvider>
       </body>
     </html>

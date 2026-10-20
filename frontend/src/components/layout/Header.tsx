@@ -1,10 +1,9 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
-import { logout } from '@/store/authSlice';
+import { logout } from '@/features/auth/state/auth-slice';
 import MegaMenu from './MegaMenu';
-import AdminGuard from '../account/AdminGuard';
 
 export default function Header() {
   const { user } = useAppSelector((s) => s.auth);
@@ -27,11 +26,11 @@ export default function Header() {
                 My Account
               </Link>
 
-               <AdminGuard>
+               {(user.is_staff || user.is_superuser) && (
                 <Link href="/admin" className="hover:underline text-brand-muted">
                   Admin
                 </Link>
-            </AdminGuard>
+            )}
 
               <button
                 onClick={() => dispatch(logout())}
