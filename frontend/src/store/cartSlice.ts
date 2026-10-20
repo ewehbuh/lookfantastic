@@ -96,7 +96,7 @@ const cartSlice = createSlice({
     const updateCart = (state: CartState, action: any) => {
       const data = action.payload;
       const items = (data.items || []).map(normaliseCartItem);
-      
+
       // Derive totals from the normalised items
       const totalItems = items.reduce((sum: number, item: CartItem) => sum + item.quantity, 0);
       const totalPrice = items.reduce((sum: number, item: CartItem) => sum + item.line_total, 0);
