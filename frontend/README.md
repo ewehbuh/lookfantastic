@@ -132,3 +132,27 @@ API responses and navigation are mocked; these are not live payment tests or ful
 browser end-to-end tests. Client/server module boundaries are separately checked by
 the Next.js production build. Existing lint debt remains outside the passing `check`
 command and is still visible through `npm run lint`.
+
+
+## Catalogue integration
+
+Homepage, category and product screens now use the typed backend contract in
+`features/catalogue/types/catalogue.ts` and services in `features/catalogue/api/`.
+`/products` is the general browsing route; featured brand links apply its `brand`
+filter. Category paths, multiple brands, prices, offers, sorting and pagination are
+passed to Django. Pagination retains filters and uses local URLs, never the backend
+host returned in `next`/`previous`. Filter submission resets the page.
+
+Empty results and API failures have separate displays. Only missing product records
+produce product-not-found; failed detail requests reach a retry boundary. Product
+controls select an available SKU, cap quantity at its stock, and show add-to-basket
+success/failure. Basket eligibility/prices remain authoritative on Django. Product
+text is escaped instead of injecting description HTML; rich-text formatting can be
+added later with an explicit sanitization policy. Review summaries and applicable
+offer names are displayed; review submission is a later phase.
+
+Catalogue tests cover API contracts, exact slug resolution, homepage empty responses,
+filter/pagination state, empty/error screens, stock controls and basket failures.
+The running development database was empty during live smoke verification; product
+detail purchase behaviour is covered with mocked backend responses. Currency display
+still uses the existing GBP default until the currency-selector integration stage.

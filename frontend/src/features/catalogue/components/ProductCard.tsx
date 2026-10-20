@@ -1,7 +1,8 @@
 import { Link } from '@/i18n/navigation';
+import type { ProductSummary } from '../types/catalogue';
 import { formatCurrency } from '@/lib/utils';
 
-export default function ProductCard({ product }: { product: any }) {
+export default function ProductCard({ product }: { product: ProductSummary }) {
   return (
     <Link href={`/product/${product.slug}`} className="group relative block">
       {/* Featured badge */}
@@ -19,6 +20,9 @@ export default function ProductCard({ product }: { product: any }) {
       </div>
       <h3 className="text-sm font-medium group-hover:underline">{product.name}</h3>
       <p className="text-sm text-brand-muted">{product.brand?.name}</p>
+      {product.on_offer && <p className="text-sm">Offer available</p>}
+      {product.review_count > 0 && <p className="text-sm">{product.rating_average?.toFixed(1)} / 5 ({product.review_count} reviews)</p>}
+      {!product.default_variant && <p className="text-sm">Currently unavailable</p>}
       <p className="text-sm font-bold">{formatCurrency(product.price)}</p>
     </Link>
   );

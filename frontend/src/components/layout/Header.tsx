@@ -17,6 +17,7 @@ export default function Header() {
           Lookfantastic
         </Link>
 
+        <Link href="/products" className="text-sm underline">Shop all</Link>
         <MegaMenu />
 
         <div className="flex items-center gap-4 text-sm">

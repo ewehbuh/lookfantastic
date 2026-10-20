@@ -4,16 +4,17 @@ import { useState } from 'react';
 import { useAppDispatch } from '@/store/hooks';
 import { addToCart } from '@/features/cart/state/cart-slice';
 import VariantSelector from '@/features/catalogue/components/VariantSelector';
-import ProductReviews from '@/features/catalogue/components/ProductReviews';
+import type { ProductDetail } from '../types/catalogue';
 import { formatCurrency } from '@/lib/utils';
 
-export default function ProductDetailClient({ product }: { product: any }) {
+export default function ProductDetailClient({ product }: { product: ProductDetail }) {
   const dispatch = useAppDispatch();
   const [selectedVariant, setSelectedVariant] = useState(
-    product.default_variant ?? product.variants?.[0] ?? null
+    product.variants.find(variant => variant.stock > 0) ?? product.default_variant ?? null
   );
   const [quantity, setQuantity] = useState(1);
   const [adding, setAdding] = useState(false);
+  const [error, setError] = useState('');
   const [added, setAdded] = useState(false);
 
   // Image gallery state
@@ -21,15 +22,17 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const images = product.images ?? [];
 
   const handleAdd = async () => {
-    if (!selectedVariant) return;
+    if (!selectedVariant || selectedVariant.stock < 1 || quantity > selectedVariant.stock) return;
 
     setAdding(true);
+    setError('');
+    setAdded(false);
     try {
       await dispatch(addToCart({ variant_id: selectedVariant.id, quantity })).unwrap();
       setAdded(true);
-      setTimeout(() => setAdded(false), 2000);
-    } catch (err) {
-      console.error('Add to cart failed', err);
+
+    } catch {
+      setError('Unable to add this item. Check availability and try again.');
     } finally {
       setAdding(false);
     }
@@ -53,9 +56,11 @@ export default function ProductDetailClient({ product }: { product: any }) {
             {/* Thumbnails row */}
             {images.length > 1 && (
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                {images.map((img: any, idx: number) => (
+                {images.map((img, idx) => (
                   <button
                     key={img.id || idx}
+                    aria-label={`Show image ${idx + 1}`}
+                    aria-pressed={idx === activeImageIndex}
                     onClick={() => setActiveImageIndex(idx)}
                     className={`w-16 h-16 flex-shrink-0 border-2 rounded overflow-hidden transition
                       ${idx === activeImageIndex ? 'border-black' : 'border-transparent hover:border-gray-400'}
@@ -83,17 +88,19 @@ export default function ProductDetailClient({ product }: { product: any }) {
         <p className="text-2xl font-bold mt-2">{formatCurrency(selectedVariant?.price)}</p>
 
         {product.variants?.length > 1 && (
-          <VariantSelector variants={product.variants} onSelect={setSelectedVariant} />
+          <VariantSelector variants={product.variants} value={selectedVariant?.id} onSelect={variant => {setSelectedVariant(variant); setQuantity(1); setAdded(false); setError('');}} />
         )}
 
         {/* Quantity selector */}
         <div className="mt-4 flex items-center gap-2">
-          <label className="text-sm">Qty:</label>
+          <label htmlFor="product-quantity" className="text-sm">Qty:</label>
           <input
+            id="product-quantity"
             type="number"
+            max={selectedVariant?.stock || 1}
             min={1}
             value={quantity}
-            onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+            onChange={(e) => setQuantity(Math.min(selectedVariant?.stock || 1, Math.max(1, parseInt(e.target.value) || 1)))}
             className="w-16 border p-1 text-center rounded"
           />
         </div>
@@ -101,16 +108,21 @@ export default function ProductDetailClient({ product }: { product: any }) {
         {/* Add to cart button */}
         <button
           onClick={handleAdd}
-          disabled={adding}
+          disabled={adding || !selectedVariant || selectedVariant.stock < 1}
           className={`mt-6 px-8 py-3 rounded text-brand-paper font-semibold transition
             ${added ? 'bg-green-600 hover:bg-green-600' : 'bg-brand-ink hover:bg-brand-hover'}
           `}
         >
-          {adding ? 'Adding...' : added ? 'Added ✓' : 'Add to Cart'}
+          {!selectedVariant || selectedVariant.stock < 1 ? 'Out of stock' : adding ? 'Adding...' : added ? 'Added ✓' : 'Add to Cart'}
         </button>
 
-        <div className="mt-8 prose" dangerouslySetInnerHTML={{ __html: product.description }} />
-        <ProductReviews productId={product.id} />
+        {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
+        {added && <p role="status" className="mt-3">Item added to your basket.</p>}
+        {product.offers.map(offer => <p key={offer.id} className="mt-3 border p-3">{offer.name} · Applied in your basket when eligible</p>)}
+        <p className="mt-6">{product.review_count} reviews{product.rating_average !== null ? ` · ${product.rating_average.toFixed(1)} / 5` : ''}</p>
+        <div className="mt-8 whitespace-pre-line">{product.description}</div>
+        {product.how_to_use && <section className="mt-6"><h2 className="font-bold">How to use</h2><p className="whitespace-pre-line">{product.how_to_use}</p></section>}
+        {product.ingredients && <section className="mt-6"><h2 className="font-bold">Ingredients</h2><p className="whitespace-pre-line">{product.ingredients}</p></section>}
       </div>
     </div>
   );
