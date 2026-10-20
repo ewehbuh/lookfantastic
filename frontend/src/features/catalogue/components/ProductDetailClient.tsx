@@ -5,7 +5,7 @@ import { useAppDispatch } from '@/store/hooks';
 import { addToCart } from '@/features/cart/state/cart-slice';
 import VariantSelector from '@/features/catalogue/components/VariantSelector';
 import type { ProductDetail } from '../types/catalogue';
-import { formatCurrency } from '@/lib/utils';
+import Price from '@/features/currency/components/Price';
 
 export default function ProductDetailClient({ product }: { product: ProductDetail }) {
   const dispatch = useAppDispatch();
@@ -85,7 +85,7 @@ export default function ProductDetailClient({ product }: { product: ProductDetai
       <div>
         <p className="text-sm text-gray-500">{product.brand?.name}</p>
         <h1 className="text-3xl font-bold">{product.name}</h1>
-        <p className="text-2xl font-bold mt-2">{formatCurrency(selectedVariant?.price)}</p>
+        <p className="text-2xl font-bold mt-2"><Price amount={selectedVariant?.price} /></p>
 
         {product.variants?.length > 1 && (
           <VariantSelector variants={product.variants} value={selectedVariant?.id} onSelect={variant => {setSelectedVariant(variant); setQuantity(1); setAdded(false); setError('');}} />

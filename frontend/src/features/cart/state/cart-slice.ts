@@ -1,123 +1,69 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, isAnyOf } from '@reduxjs/toolkit';
 import apiClient from '@/lib/api/client';
-
-// ---------- Types ----------
-interface CartItem {
-  id: number;
-  variant: {
-    id: number;
-    sku: string;
-    size?: string;
-    shade?: string;
-    price: string;
-    compare_at_price?: string;
-    stock: number;
-    image?: string | null;
-    product_name?: string;
-  } | null;
-  quantity: number;
-  line_total: number;             // guaranteed number
-}
+import { apiError } from '@/lib/api/errors';
+import { selectCurrency } from '@/features/currency/state/currency-slice';
+import type { Basket, CartItem, BasketQuote, Voucher } from '../types/cart';
 
 interface CartState {
-  items: CartItem[];
-  totalPrice: number;
-  totalItems: number;
-  loading: boolean;
+  items: CartItem[]; totalPrice: number; totalItems: number; loading: boolean; loaded: boolean;
+  error: string | null; voucher: Voucher | null; warnings: {variant_id: number; detail: string}[];
+  revision: number; quote: BasketQuote | null; quoteLoading: boolean; quoteError: string | null; quoteRequest: string | null;
 }
+const initialState: CartState = {items: [], totalPrice: 0, totalItems: 0, loading: false, loaded: false,
+  error: null, voucher: null, warnings: [], revision: 0, quote: null, quoteLoading: false, quoteError: null, quoteRequest: null};
 
-const initialState: CartState = {
-  items: [],
-  totalPrice: 0,
-  totalItems: 0,
-  loading: false,
-};
-
-// ---------- Helpers ----------
-function normaliseCartItem(item: any): CartItem {
-  const variant = item.variant ? {...item.variant} : null;
-  const quantity = Number(item.quantity) || 0;
-
-  // Use line_total from API, or calculate from variant price
-  let line_total = Number(item.line_total);
-  if (isNaN(line_total) && variant?.price) {
-    line_total = Number(variant.price) * quantity;
-  }
-
-  // Ensure product_name is available for display
-  if (variant && !variant.product_name) {
-    variant.product_name = variant.sku || 'Product';
-  }
-
-  return {
-    id: item.id,
-    variant,
-    quantity,
-    line_total: line_total || 0,
-  };
-}
-
-// ---------- Thunks ----------
-export const fetchCart = createAsyncThunk('cart/fetch', async () => {
-  const res = await apiClient.get('/api/cart/');
-  return res.data;
+export const fetchCart = createAsyncThunk('cart/fetch', async (_, {rejectWithValue}) => {
+  try {return (await apiClient.get<Basket>('/api/cart/')).data;}
+  catch (error) {return rejectWithValue(apiError(error, 'Unable to load your basket. Please try again.'));}
 });
-
-export const addToCart = createAsyncThunk(
-  'cart/add',
-  async ({ variant_id, quantity = 1 }: { variant_id: number; quantity?: number }) => {
-    const res = await apiClient.post('/api/cart/add/', { variant_id, quantity });
-    return res.data;
-  }
-);
-
-export const updateCartItem = createAsyncThunk(
-  'cart/update',
-  async ({ item_id, quantity }: { item_id: number; quantity: number }) => {
-    const res = await apiClient.patch('/api/cart/update-item/', { item_id, quantity });
-    return res.data;
-  }
-);
-
-export const removeFromCart = createAsyncThunk(
-  'cart/remove',
-  async (item_id: number) => {
-    const res = await apiClient.delete('/api/cart/remove/', { data: { item_id } });
-    return res.data;
-  }
-);
-
-// ---------- Slice ----------
-const cartSlice = createSlice({
-  name: 'cart',
-  initialState,
-  reducers: {},
-  extraReducers: (builder) => {
-    const updateCart = (state: CartState, action: any) => {
-      const data = action.payload;
-      const items = (data.items || []).map(normaliseCartItem);
-
-      // Derive totals from the normalised items
-      const totalItems = items.reduce((sum: number, item: CartItem) => sum + item.quantity, 0);
-      const totalPrice = items.reduce((sum: number, item: CartItem) => sum + item.line_total, 0);
-
-      state.items = items;
-      state.totalItems = totalItems;
-      state.totalPrice = totalPrice;
-      state.loading = false;
-    };
-
-    builder
-      .addCase(fetchCart.pending, (state) => { state.loading = true; })
-      .addCase(fetchCart.fulfilled, updateCart)
-      .addCase(addToCart.fulfilled, updateCart)
-      .addCase(updateCartItem.fulfilled, updateCart)
-      .addCase(removeFromCart.fulfilled, updateCart)
-      .addCase(fetchCart.rejected, (state) => { state.loading = false; })
-      .addCase(addToCart.rejected, (state) => { state.loading = false; })
-      .addCase(updateCartItem.rejected, (state) => { state.loading = false; })
-      .addCase(removeFromCart.rejected, (state) => { state.loading = false; });
+export const addToCart = createAsyncThunk('cart/add', async ({variant_id, quantity = 1}: {variant_id: number; quantity?: number}) =>
+  (await apiClient.post<Basket>('/api/cart/add/', {variant_id, quantity})).data);
+export const updateCartItem = createAsyncThunk('cart/update', async ({item_id, quantity}: {item_id: number; quantity: number}, {rejectWithValue}) => {
+  try {return (await apiClient.patch<Basket>('/api/cart/update-item/', {item_id, quantity})).data;}
+  catch (error) {return rejectWithValue(apiError(error, 'Unable to update quantity. Check available stock.'));}
+});
+export const removeFromCart = createAsyncThunk('cart/remove', async (item_id: number, {rejectWithValue}) => {
+  try {return (await apiClient.delete<Basket>('/api/cart/remove/', {data: {item_id}})).data;}
+  catch (error) {return rejectWithValue(apiError(error, 'Unable to remove this item. Please try again.'));}
+});
+export const applyVoucher = createAsyncThunk('cart/voucher', async (code: string | null, {rejectWithValue}) => {
+  try {return code === null ? (await apiClient.delete<Basket>('/api/cart/voucher/')).data :
+    (await apiClient.post<Basket>('/api/cart/voucher/', {code})).data;}
+  catch (error) {return rejectWithValue(apiError(error, 'Voucher could not be applied. Check its code and conditions.'));}
+});
+export const fetchQuote = createAsyncThunk('cart/quote', async (currency: string, {rejectWithValue}) => {
+  try {return (await apiClient.get<BasketQuote>('/api/cart/quote/', {params: {currency}})).data;}
+  catch (error) {return rejectWithValue(apiError(error, 'A current total is unavailable. Check your voucher or refresh currency rates.'));}
+});
+const mutations = [fetchCart, addToCart, updateCartItem, removeFromCart, applyVoucher] as const;
+const slice = createSlice({
+  name: 'cart', initialState, reducers: {},
+  extraReducers: builder => {
+    builder.addCase(selectCurrency, state => {state.quote = null; state.quoteRequest = null; state.quoteLoading = false;})
+      .addCase(fetchQuote.pending, (state, action) => {state.quote = null; state.quoteError = null; state.quoteLoading = true; state.quoteRequest = action.meta.requestId;})
+      .addCase(fetchQuote.fulfilled, (state, action) => {
+        if (state.quoteRequest !== action.meta.requestId) return;
+        state.quote = action.payload; state.quoteLoading = false;
+      })
+      .addCase(fetchQuote.rejected, (state, action) => {
+        if (state.quoteRequest !== action.meta.requestId) return;
+        state.quoteError = String(action.payload ?? 'Unable to calculate total.'); state.quoteLoading = false;
+      })
+      .addMatcher(isAnyOf(...mutations.map(thunk => thunk.pending)), state => {
+        state.loading = true; state.error = null; state.quote = null; state.quoteRequest = null; state.quoteLoading = false;
+      })
+      .addMatcher(isAnyOf(...mutations.map(thunk => thunk.fulfilled)), (state, action) => {
+        const data = action.payload;
+        state.items = data.items.map(item => ({...item, variant: item.variant ? {...item.variant, product_name: item.variant.product_name || item.variant.sku} : null, line_total: Number(item.line_total)}));
+        state.totalPrice = data.total_price !== undefined ? Number(data.total_price) : state.items.reduce((sum, item) => sum + item.line_total, 0);
+        state.totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
+        state.voucher = data.voucher ?? null;
+        state.warnings = data.warnings?.length ? data.warnings : state.warnings;
+        state.loading = false; state.loaded = true; state.revision += 1;
+      })
+      .addMatcher(isAnyOf(...mutations.map(thunk => thunk.rejected)), (state, action) => {
+        state.loading = false; state.error = String(action.payload ?? action.error.message ?? 'Basket request failed.');
+      });
   },
 });
-
-export default cartSlice.reducer;
+export default slice.reducer;

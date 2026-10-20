@@ -1,6 +1,6 @@
 import { Link } from '@/i18n/navigation';
 import type { ProductSummary } from '../types/catalogue';
-import { formatCurrency } from '@/lib/utils';
+import Price from '@/features/currency/components/Price';
 
 export default function ProductCard({ product }: { product: ProductSummary }) {
   return (
@@ -23,7 +23,7 @@ export default function ProductCard({ product }: { product: ProductSummary }) {
       {product.on_offer && <p className="text-sm">Offer available</p>}
       {product.review_count > 0 && <p className="text-sm">{product.rating_average?.toFixed(1)} / 5 ({product.review_count} reviews)</p>}
       {!product.default_variant && <p className="text-sm">Currently unavailable</p>}
-      <p className="text-sm font-bold">{formatCurrency(product.price)}</p>
+      <p className="text-sm font-bold"><Price amount={product.price} /></p>
     </Link>
   );
 }

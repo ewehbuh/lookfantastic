@@ -2,6 +2,7 @@ import { Link } from '@/i18n/navigation';
 import { catalogue } from '../api/server';
 import { catalogueQuery, pageHref } from '../api/query';
 import type { CatalogueSearchParams, ProductPage } from '../types/catalogue';
+import BaseCurrencyLabel from '@/features/currency/components/BaseCurrencyLabel';
 import ProductCard from './ProductCard';
 
 export default async function ProductListing({searchParams, category}: {
@@ -31,8 +32,8 @@ export default async function ProductListing({searchParams, category}: {
         {query.get('brand') && !data.facets.brands.some(brand => brand.brand__slug === query.get('brand')) && <option value={query.get('brand')!}>{query.get('brand')}</option>}
         {data.facets.brands.map(brand => <option key={brand.brand__slug} value={brand.brand__slug}>{brand.brand__name} ({brand.count})</option>)}
       </select></label>
-      <label>Minimum price<input className="block border p-2 w-32" name="min_price" type="number" min="0" step="0.01" defaultValue={query.get('min_price') ?? ''} /></label>
-      <label>Maximum price<input className="block border p-2 w-32" name="max_price" type="number" min="0" step="0.01" defaultValue={query.get('max_price') ?? ''} /></label>
+      <label>Minimum price (<BaseCurrencyLabel />)<input className="block border p-2 w-32" name="min_price" type="number" min="0" step="0.01" defaultValue={query.get('min_price') ?? ''} /></label>
+      <label>Maximum price (<BaseCurrencyLabel />)<input className="block border p-2 w-32" name="max_price" type="number" min="0" step="0.01" defaultValue={query.get('max_price') ?? ''} /></label>
       <label>Sort<select className="block border p-2" name="ordering" defaultValue={query.get('ordering') ?? '-created_at'}>
         <option value="-created_at">Newest first</option><option value="price">Price: low to high</option>
         <option value="-price">Price: high to low</option><option value="name">Name</option>

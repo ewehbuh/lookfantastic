@@ -30,7 +30,7 @@ describe('basket API and state', () => {
     vi.spyOn(apiClient, 'patch').mockRejectedValue(new Error('Insufficient stock'));
     const store = makeStore();
     await store.dispatch(fetchCart());
-    await expect(store.dispatch(updateCartItem({item_id: 1, quantity: 100})).unwrap()).rejects.toMatchObject({message: 'Insufficient stock'});
+    await expect(store.dispatch(updateCartItem({item_id: 1, quantity: 100})).unwrap()).rejects.toBe('Unable to update quantity. Check available stock.');
     expect(store.getState().cart.totalPrice).toBe(20);
     expect(store.getState().cart.loading).toBe(false);
   });

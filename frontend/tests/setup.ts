@@ -5,5 +5,5 @@ import { afterEach, beforeEach, vi } from 'vitest';
 // Vitest renders browser components without Next's module-marker handling.
 vi.mock('client-only', () => ({}));
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {localStorage.clear(); sessionStorage.clear();});
 afterEach(() => cleanup());

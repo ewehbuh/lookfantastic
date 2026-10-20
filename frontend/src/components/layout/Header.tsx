@@ -3,6 +3,7 @@
 import { Link } from '@/i18n/navigation';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { logout } from '@/features/auth/state/auth-slice';
+import CurrencySelector from '@/features/currency/components/CurrencySelector';
 import MegaMenu from './MegaMenu';
 
 export default function Header() {
@@ -19,6 +20,7 @@ export default function Header() {
 
         <Link href="/products" className="text-sm underline">Shop all</Link>
         <MegaMenu />
+        <CurrencySelector />
 
         <div className="flex items-center gap-4 text-sm">
           {user ? (

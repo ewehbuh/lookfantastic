@@ -154,5 +154,44 @@ offer names are displayed; review submission is a later phase.
 Catalogue tests cover API contracts, exact slug resolution, homepage empty responses,
 filter/pagination state, empty/error screens, stock controls and basket failures.
 The running development database was empty during live smoke verification; product
-detail purchase behaviour is covered with mocked backend responses. Currency display
-still uses the existing GBP default until the currency-selector integration stage.
+detail purchase behaviour is covered with mocked backend responses. Product prices now use the currency-selector integration below; backend price
+filters remain in the catalogue base currency and are labelled accordingly.
+
+
+## Basket, vouchers and currency
+
+The header loads `/api/currencies/`, offers only currencies with current backend
+rates and restores a valid local preference. If a saved currency is no longer
+available it falls back to the backend base. Manual choices are remembered in
+localStorage when available. There is no location-based selection yet.
+
+Product prices and drawer subtotals are indicative conversions; unavailable rates
+show a placeholder rather than inventing a conversion. Basket item totals, voucher
+discounts, shipping and totals come from `/api/cart/quote/`. Cart changes and
+currency changes invalidate quotes, and responses from invalidated/older quote
+requests are ignored. Checkout is unavailable without a matching quote. Base price
+filters remain in the backend base currency. Automatic product promotions already
+included in line totals are not recalculated in the browser.
+
+Basket state retains backend voucher validity, promotion savings and guest-merge
+warnings. Voucher apply/remove calls the backend and displays validation failures.
+Quantity changes respect displayed stock and errors preserve the existing basket.
+The basket waits for session restoration before fetching to avoid loading a guest
+basket while a signed-in identity is being restored. Drawer totals are explicitly
+indicative; the full basket confirms vouchers/shipping before proceeding.
+
+The existing checkout now sends the quoted currency and shows the final returned
+order total before a customer follows the hosted HTTPS payment link. Guest order
+capabilities are kept in sessionStorage when available, never in URLs. A browser
+redirect is not payment confirmation. Direct checkout reloads return customers to
+the basket for a fresh quote. This is the minimum currency-safe handoff: payment
+method selection (currently default Stripe), saved addresses, token recovery UI and
+backend-verified payment/order status screens remain for the checkout phase. No live
+charges were made during verification.
+
+
+Live read-only checks for currencies, guest basket and GBP quote passed against a
+new process running the latest backend on port 8001. An older process on port 8000
+returned 404 for currencies; restart that process from the current backend checkout
+before using the frontend's default API URL. Currency tests use mocked non-GBP rates;
+actual foreign-currency availability still depends on current backend exchange rates.
