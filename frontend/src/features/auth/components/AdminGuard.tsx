@@ -20,7 +20,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
   }, [user, router, initialized, loading]);
 
   // Show nothing / loader while checking
-  if (!user || (!user.is_staff && !user.is_superuser)) {
+  if (!initialized || loading || !user || (!user.is_staff && !user.is_superuser)) {
     return (
       <div className="flex items-center justify-center h-screen">
         <p className="text-gray-500">Checking permissions…</p>

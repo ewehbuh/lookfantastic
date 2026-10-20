@@ -35,7 +35,7 @@ const initialState: CartState = {
 
 // ---------- Helpers ----------
 function normaliseCartItem(item: any): CartItem {
-  const variant = item.variant || null;
+  const variant = item.variant ? {...item.variant} : null;
   const quantity = Number(item.quantity) || 0;
 
   // Use line_total from API, or calculate from variant price

@@ -21,6 +21,8 @@ rendering. The backend must allow the frontend's origin and credentialed request
 Do not put secrets in variables prefixed with `NEXT_PUBLIC_`.
 
 ```sh
+npm test
+npm run test:watch
 npm run typecheck
 npm run build
 npm run start
@@ -108,3 +110,25 @@ and resolve lint findings before expanding functionality. Existing checkout scre
 still need the hosted-payment and currency integrations, and subscription purchase
 must remain unavailable until real recurring billing is implemented. The payment
 return page is explicitly pending; browser redirects do not prove payment success.
+
+
+## Automated tests
+
+Vitest and React Testing Library run browser-component and state/API tests in jsdom.
+Run `npm test` for one complete run or `npm run test:watch` during development.
+`npm run check` runs tests, TypeScript and the production build in sequence, stopping
+on failure. The GitHub Actions frontend workflow runs this check for frontend changes
+on pull requests and pushes to master. Its first hosted run must be checked on GitHub;
+local success does not establish a successful hosted workflow run.
+
+Keep tests beside their feature in `__tests__/` or use `*.test.ts(x)` filenames.
+Shared setup lives in `tests/setup.ts`; the runner is configured in
+`vitest.config.mts`. Session storage and rendered components are reset between tests.
+
+The initial suite covers permission guards during session restoration, customer/staff
+access, login/session rejection, independent Redux stores, basket discounts and API
+operations, response immutability, cookie/bearer handling and invalid price display.
+API responses and navigation are mocked; these are not live payment tests or full
+browser end-to-end tests. Client/server module boundaries are separately checked by
+the Next.js production build. Existing lint debt remains outside the passing `check`
+command and is still visible through `npm run lint`.
