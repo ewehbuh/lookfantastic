@@ -195,3 +195,45 @@ new process running the latest backend on port 8001. An older process on port 80
 returned 404 for currencies; restart that process from the current backend checkout
 before using the frontend's default API URL. Currency tests use mocked non-GBP rates;
 actual foreign-currency availability still depends on current backend exchange rates.
+
+## Authentication integration
+
+Sign-in and Google sign-in keep the access token in memory. HttpOnly refresh cookies
+are sent with credentialed requests; legacy localStorage access/refresh tokens are
+removed. On application startup, the frontend refreshes the cookie session and loads
+`/api/accounts/me/`. A normal missing/expired cookie leaves the visitor signed out.
+A shared refresh promise handles concurrent 401 responses and retries each protected
+request once. Refresh network failures do not silently revoke an otherwise valid
+session. Session generation checks prevent late refresh/login results from restoring
+a signed-out session. Access control is enforced by Django, not frontend guards.
+
+Logout calls `/api/accounts/logout/` and immediately clears local identity/private
+basket state. Basket loading waits until logout completes. If the server cannot be
+reached, a visible retry warning remains: the browser cannot delete the HttpOnly
+server cookie, so local logout alone does not prove server revocation. Issued access
+tokens can remain valid until expiry under the existing backend policy.
+
+Registration sends `email`, `password1`, `password2` and shows backend validation.
+The backend decides whether verification is mandatory (currently optional in its
+development configuration). Existing backend email links continue to use their
+CSRF-protected confirmation page. The frontend `/verify-email?key=...` route also
+supports explicit POST verification when supplied a key. `/reset-password` requests
+an email; `/reset-password?uid=...&token=...` posts the complete reset-confirmation
+payload. Email delivery still requires production SMTP; development uses console mail.
+
+Google is offered only when `/api/accounts/auth/providers/` enables it. The start
+endpoint creates server-side state/nonce/PKCE; the browser retains its session cookie
+through the authorization redirect. Configure `GOOGLE_OAUTH_REDIRECT_URI` and the
+Google Console redirect to the exact frontend callback URL, for example
+`https://shop.example/en/auth/google/callback`. Local HTTP localhost/127.0.0.1 URIs
+are accepted by the existing backend. The callback sends only `code` and `state` to
+Django and immediately removes query parameters from browser history. It never
+accepts an identity token directly from the browser. Live Google sign-in was not tested.
+
+Use the same hostname for browser frontend/backend during development (for example,
+127.0.0.1 on both ports), rather than mixing localhost and 127.0.0.1. Production must
+configure HTTPS, secure/SameSite cookies and trusted CORS origins appropriately;
+same-site hosting is recommended. Axios uses Django's `csrftoken`/`X-CSRFToken`
+names for credentialed requests. These frontend changes do not harden Django's
+existing development deployment settings. Multi-tab logout coordination and full
+browser end-to-end provider tests remain future work.

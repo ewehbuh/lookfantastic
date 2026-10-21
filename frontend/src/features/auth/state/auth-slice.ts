@@ -1,150 +1,91 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import apiClient, { setAccessToken } from '@/lib/api/client';
+import { createSlice, createAsyncThunk, isAnyOf, type PayloadAction } from '@reduxjs/toolkit';
+import { isAxiosError } from 'axios';
+import apiClient, {acceptSession, clearLegacyTokens, invalidateSession, refreshAccessToken, sessionVersion} from '@/lib/api/client';
+import { apiError } from '@/lib/api/errors';
+import type { AccountUser, AuthResponse, Registration } from '../types/auth';
 
 interface AuthState {
-  initialized: boolean;
-  user: any | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  loading: boolean;
-  error: string | null;
+  initialized: boolean; user: AccountUser | null; accessToken: string | null;
+  refreshToken: null; loading: boolean; error: string | null; logoutError: string | null; activeRequest: string | null;
 }
-
-
-const initialState: AuthState = {
-  initialized: false,
-  user: null,
-  accessToken: null,
-  refreshToken: null,
-  loading: false,
-  error: null,
-};
-
-export const login = createAsyncThunk(
-  'auth/login',
-  async (credentials: { email: string; password: string }) => {
-    const res = await apiClient.post('/api/accounts/login/', credentials);
-    return res.data;
-  }
-);
-
-export const register = createAsyncThunk(
-  'auth/register',
-  async (userData: any) => {
-    const res = await apiClient.post('/api/accounts/register/', userData);
-    return res.data;
-  }
-);
-
-// New: fetch current user details using the stored token
-export const fetchUser = createAsyncThunk(
-  'auth/fetchUser',
-  async (_, { getState }) => {
-    // The token is already set in apiClient defaults, so just call the endpoint
-    const res = await apiClient.get('/api/accounts/me/');
-    return res.data;
-  }
-);
-
-const authSlice = createSlice({
-  name: 'auth',
-  initialState,
-  reducers: {
-    restoreSession(state, action: {payload: {accessToken: string | null; refreshToken: string | null}}) {
-      state.accessToken = action.payload.accessToken;
-      state.refreshToken = action.payload.refreshToken;
-      state.initialized = true;
-      state.loading = Boolean(action.payload.accessToken);
-    },
-    logout(state) {
-      state.user = null;
-      state.accessToken = null;
-      state.refreshToken = null;
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      setAccessToken(null);
-    },
-    setUser(state, action) {
-      state.user = action.payload;
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      .addCase(login.pending, (s) => {
-        s.loading = true;
-        s.error = null;
-      })
-      .addCase(login.fulfilled, (s, action) => {
-        const payload = action.payload;
-
-        // user data can be in `payload.user` (from USER_DETAILS_SERIALIZER)
-        // or directly at top level (if backend added extra fields)
-        const userData = payload.user || payload;
-        const user = {
-          id: userData.id ?? userData.pk,
-          email: userData.email,
-          first_name: userData.first_name || '',
-          last_name: userData.last_name || '',
-          is_staff: userData.is_staff ?? false,
-          is_superuser: userData.is_superuser ?? false,
-          profile: userData.profile || null,
-        };
-
-        s.accessToken = payload.access;
-        s.refreshToken = payload.refresh;
-        s.user = user;
-        s.loading = false;
-
-        localStorage.setItem('accessToken', payload.access);
-        localStorage.setItem('refreshToken', payload.refresh);
-        setAccessToken(payload.access);
-      })
-      .addCase(login.rejected, (s, action) => {
-        s.error = action.error.message ?? 'Login failed';
-        s.loading = false;
-      })
-      .addCase(register.pending, (s) => {
-        s.loading = true;
-        s.error = null;
-      })
-      .addCase(register.fulfilled, (s) => {
-        s.loading = false;
-      })
-      .addCase(register.rejected, (s, action) => {
-        s.error = action.error.message ?? 'Registration failed';
-        s.loading = false;
-      })
-      // fetchUser
-      .addCase(fetchUser.pending, (s) => {
-        s.loading = true;
-      })
-      .addCase(fetchUser.fulfilled, (s, action) => {
-        const userData = action.payload;
-        const user = {
-          id: userData.id ?? userData.pk,
-          email: userData.email,
-          first_name: userData.first_name || '',
-          last_name: userData.last_name || '',
-          is_staff: userData.is_staff ?? false,
-          is_superuser: userData.is_superuser ?? false,
-          profile: userData.profile || null,
-        };
-        s.user = user;
-        s.loading = false;
-      })
-      .addCase(fetchUser.rejected, (s, action) => {
-        // token invalid or expired – force logout
-        s.error = action.error.message ?? 'Session expired';
-        s.user = null;
-        s.accessToken = null;
-        s.refreshToken = null;
-        s.loading = false;
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setAccessToken(null);
-      });
-  },
+const initialState: AuthState = {initialized: false, user: null, accessToken: null, refreshToken: null, loading: false, error: null, logoutError: null, activeRequest: null};
+const normalize = (user: AccountUser): AccountUser => ({...user, id: user.id ?? user.pk});
+async function establish(path: string, payload: unknown) {
+  invalidateSession();
+  const started = sessionVersion();
+  const {data} = await apiClient.post<AuthResponse>(path, payload);
+  if (started !== sessionVersion()) throw new Error('Session changed. Sign in again.');
+  if (!data.access) throw new Error('Sign-in response did not contain an access token.');
+  acceptSession(data.access);
+  return {access: data.access, user: normalize(data.user)};
+}
+export const login = createAsyncThunk('auth/login', async (credentials: {email: string; password: string}, {rejectWithValue}) => {
+  try {return await establish('/api/accounts/login/', credentials);}
+  catch (error) {return rejectWithValue(apiError(error, 'Unable to sign in. Check your details and try again.'));}
 });
-
-export const { logout, setUser, restoreSession } = authSlice.actions;
-export default authSlice.reducer;
+export const googleLogin = createAsyncThunk('auth/google', async (credentials: {code: string; state: string}, {rejectWithValue}) => {
+  try {return await establish('/api/accounts/google/', credentials);}
+  catch (error) {return rejectWithValue(apiError(error, 'Google sign-in failed. Please start again.'));}
+});
+export const register = createAsyncThunk('auth/register', async (data: Registration, {rejectWithValue}) => {
+  try {return (await apiClient.post('/api/accounts/register/', data)).data;}
+  catch (error) {return rejectWithValue(apiError(error, 'Unable to create your account. Please try again.'));}
+});
+export const bootstrapSession = createAsyncThunk('auth/bootstrap', async (_, {rejectWithValue}) => {
+  clearLegacyTokens();
+  const started = sessionVersion();
+  try {
+    const access = await refreshAccessToken();
+    const {data} = await apiClient.get<AccountUser>('/api/accounts/me/');
+    if (started !== sessionVersion()) throw new Error('Session changed.');
+    return {access, user: normalize(data)};
+  } catch (error) {
+    if (isAxiosError(error) && [401, 403].includes(error.response?.status ?? 0)) return null;
+    return rejectWithValue('Unable to restore your session. Please sign in or try again.');
+  }
+});
+export const fetchUser = createAsyncThunk('auth/fetchUser', async () => {
+  try {return (await apiClient.get<AccountUser>('/api/accounts/me/')).data;}
+  catch (error) {
+    if (isAxiosError(error) && [401, 403].includes(error.response?.status ?? 0)) invalidateSession();
+    throw error;
+  }
+});
+export const logout = createAsyncThunk('auth/logout', async (_, {rejectWithValue}) => {
+  invalidateSession();
+  try {await apiClient.post('/api/accounts/logout/', {});}
+  catch {return rejectWithValue('Signed out locally, but server logout could not be confirmed. Retry logout before leaving a shared device.');}
+});
+const slice = createSlice({name: 'auth', initialState, reducers: {
+  sessionExpired: () => ({...initialState, initialized: true}),
+  clearAuthError(state) {state.error = null;},
+  // Used to initialize state in isolated component tests; production restores the cookie session.
+  restoreSession(state, {payload}: PayloadAction<{accessToken: string | null; refreshToken: string | null}>) {
+    state.accessToken = payload.accessToken; state.initialized = true; state.loading = Boolean(payload.accessToken);
+  },
+  setUser(state, {payload}: PayloadAction<AccountUser>) {state.user = payload;},
+}, extraReducers: builder => {
+  builder.addCase(logout.pending, () => ({...initialState, initialized: true, loading: true}))
+    .addCase(logout.fulfilled, () => ({...initialState, initialized: true}))
+    .addCase(logout.rejected, (state, action) => {state.loading = false; state.logoutError = String(action.payload);})
+    .addCase(register.pending, state => {state.loading = true; state.error = null;})
+    .addCase(register.fulfilled, state => {state.loading = false;})
+    .addCase(register.rejected, (state, action) => {state.loading = false; state.error = String(action.payload);})
+    .addCase(fetchUser.pending, state => {state.loading = true;})
+    .addCase(fetchUser.fulfilled, (state, action) => {state.user = normalize(action.payload); state.loading = false;})
+    .addCase(fetchUser.rejected, state => {state.user = null; state.accessToken = null; state.loading = false;})
+    .addMatcher(isAnyOf(login.pending, googleLogin.pending, bootstrapSession.pending), (state, action) => {
+      state.activeRequest = action.meta.requestId; state.loading = true; state.error = null;
+    })
+    .addMatcher(isAnyOf(login.fulfilled, googleLogin.fulfilled, bootstrapSession.fulfilled), (state, action) => {
+      if (state.activeRequest !== action.meta.requestId) return;
+      state.user = action.payload?.user ?? null; state.accessToken = action.payload?.access ?? null;
+      state.initialized = true; state.loading = false; state.activeRequest = null;
+    })
+    .addMatcher(isAnyOf(login.rejected, googleLogin.rejected, bootstrapSession.rejected), (state, action) => {
+      if (state.activeRequest !== action.meta.requestId) return;
+      state.initialized = true; state.loading = false; state.activeRequest = null; state.error = String(action.payload);
+    });
+}});
+export const {sessionExpired, clearAuthError, restoreSession, setUser} = slice.actions;
+export default slice.reducer;

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from '@/i18n/navigation';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import GoogleLoginButton from '../components/GoogleLoginButton';
 import { login } from '@/features/auth/state/auth-slice';
 import { Link } from '@/i18n/navigation';
 
@@ -35,7 +36,7 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto py-20">
       <h1 className="text-2xl font-bold mb-6">Login</h1>
       {error && (
-        <div className="bg-red-100 text-red-700 p-3 rounded mb-4">
+        <div role="alert" className="bg-red-100 text-red-700 p-3 rounded mb-4">
           {error}
         </div>
       )}
@@ -43,6 +44,8 @@ export default function LoginPage() {
         <input
           className="w-full border p-2"
           type="email"
+          aria-label="Email"
+          autoComplete="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -51,6 +54,8 @@ export default function LoginPage() {
         <input
           className="w-full border p-2"
           type="password"
+          aria-label="Password"
+          autoComplete="current-password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -64,6 +69,7 @@ export default function LoginPage() {
           {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
+      <GoogleLoginButton />
       <p className="mt-4 text-sm">
         <Link href="/register">Create account</Link> |{' '}
         <Link href="/reset-password">Forgot password?</Link>

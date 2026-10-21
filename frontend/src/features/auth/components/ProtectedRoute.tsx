@@ -5,16 +5,16 @@ import { useAppSelector } from '@/store/hooks';
 import { useEffect } from 'react';
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { accessToken, initialized, loading } = useAppSelector((s) => s.auth);
+  const { accessToken, user, initialized, loading } = useAppSelector((s) => s.auth);
   const router = useRouter();
 
   useEffect(() => {
     if (!initialized || loading) return;
-    if (!accessToken) {
+    if (!accessToken || !user) {
       router.push('/login');
     }
-  }, [accessToken, router, initialized, loading]);
+  }, [accessToken, user, router, initialized, loading]);
 
-  if (!initialized || loading || !accessToken) return null;
+  if (!initialized || loading || !accessToken || !user) return null;
   return <>{children}</>;
 }

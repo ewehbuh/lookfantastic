@@ -7,12 +7,13 @@ import CurrencySelector from '@/features/currency/components/CurrencySelector';
 import MegaMenu from './MegaMenu';
 
 export default function Header() {
-  const { user } = useAppSelector((s) => s.auth);
+  const { user, logoutError: authError } = useAppSelector((s) => s.auth);
   const totalItems = useAppSelector((s) => s.cart.totalItems);
   const dispatch = useAppDispatch();   // ← fixed
 
   return (
     <header className="bg-brand-paper text-brand-ink border-b border-brand-border">
+      {authError && <div role="alert" className="p-3 text-sm">{authError} <button onClick={() => void dispatch(logout())} className="underline">Retry logout</button></div>}
       <div className="max-w-7xl mx-auto flex items-center justify-between p-4">
         <Link href="/" className="text-xl font-bold">
           Lookfantastic

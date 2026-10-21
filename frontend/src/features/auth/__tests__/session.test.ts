@@ -15,12 +15,13 @@ describe('authentication session state', () => {
     await store.dispatch(login({email: 'shopper@example.com', password: 'example-password'})).unwrap();
     expect(post).toHaveBeenCalledWith('/api/accounts/login/', {email: 'shopper@example.com', password: 'example-password'});
     expect(store.getState().auth.user).toMatchObject({id: 3, email: 'shopper@example.com', is_staff: false});
-    expect(localStorage.getItem('accessToken')).toBe('access-test');
+    expect(localStorage.getItem('accessToken')).toBeNull();
+    expect(localStorage.getItem('refreshToken')).toBeNull();
     expect(apiClient.defaults.headers.common.Authorization).toBe('Bearer access-test');
   });
   it('clears stale identity and tokens after backend session rejection', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue({data: {access: 'expired', refresh: 'expired-refresh', user: {id: 1}}});
-    vi.spyOn(apiClient, 'get').mockRejectedValue(new Error('Session expired'));
+    vi.spyOn(apiClient, 'get').mockRejectedValue({isAxiosError: true, response: {status: 401}});
     const store = makeStore();
     await store.dispatch(login({email: 'shopper@example.com', password: 'password'}));
     await store.dispatch(fetchUser());

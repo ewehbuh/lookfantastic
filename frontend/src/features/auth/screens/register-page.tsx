@@ -1,36 +1,31 @@
 'use client';
-
 import { useState } from 'react';
-import { useRouter } from '@/i18n/navigation';
+import { Link } from '@/i18n/navigation';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { register } from '@/features/auth/state/auth-slice';
+import { register } from '../state/auth-slice';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [password1, setPassword1] = useState('');
   const [password2, setPassword2] = useState('');
+  const [complete, setComplete] = useState(false);
+  const [validation, setValidation] = useState('');
   const dispatch = useAppDispatch();
-  const { loading, error } = useAppSelector((s) => s.auth);
-  const router = useRouter();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await dispatch(register({ email, password, password2 }));
-    router.push('/login');
-  };
-
-  return (
-    <div className="max-w-md mx-auto py-20">
-      <h1 className="text-2xl font-bold mb-6">Register</h1>
-      {error && <p className="text-red-600">{error}</p>}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input className="w-full border p-2" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input className="w-full border p-2" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        <input className="w-full border p-2" type="password" placeholder="Confirm Password" value={password2} onChange={(e) => setPassword2(e.target.value)} required />
-        <button type="submit" disabled={loading} className="w-full bg-brand-ink text-brand-paper py-2 rounded">
-          {loading ? 'Creating...' : 'Register'}
-        </button>
-      </form>
-    </div>
-  );
+  const {loading, error} = useAppSelector(state => state.auth);
+  if (complete) return <section className="max-w-md mx-auto py-20"><h1 className="text-2xl font-bold">Account created</h1>
+    <p role="status">Check your email for a verification link, then sign in.</p><Link href="/login" className="underline">Sign in</Link></section>;
+  return <section className="max-w-md mx-auto py-20 px-4"><h1 className="text-2xl font-bold mb-6">Create account</h1>
+    {(validation || error) && <p role="alert">{validation || error}</p>}
+    <form className="space-y-4" onSubmit={async event => {
+      event.preventDefault(); setValidation('');
+      if (password1 !== password2) {setValidation('Passwords must match.'); return;}
+      const result = await dispatch(register({email, password1, password2}));
+      if (register.fulfilled.match(result)) setComplete(true);
+    }}>
+      <label className="block">Email<input className="w-full border p-2" type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} /></label>
+      <label className="block">Password<input className="w-full border p-2" type="password" autoComplete="new-password" required value={password1} onChange={event => setPassword1(event.target.value)} /></label>
+      <label className="block">Confirm password<input className="w-full border p-2" type="password" autoComplete="new-password" required value={password2} onChange={event => setPassword2(event.target.value)} /></label>
+      <button disabled={loading} className="bg-brand-ink text-brand-paper px-6 py-3">{loading ? 'Creating…' : 'Create account'}</button>
+    </form>
+  </section>;
 }

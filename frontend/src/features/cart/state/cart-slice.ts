@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, isAnyOf } from '@reduxjs/toolkit';
 import apiClient from '@/lib/api/client';
 import { apiError } from '@/lib/api/errors';
+import { logout, sessionExpired } from '@/features/auth/state/auth-slice';
 import { selectCurrency } from '@/features/currency/state/currency-slice';
 import type { Basket, CartItem, BasketQuote, Voucher } from '../types/cart';
 
@@ -39,7 +40,9 @@ const mutations = [fetchCart, addToCart, updateCartItem, removeFromCart, applyVo
 const slice = createSlice({
   name: 'cart', initialState, reducers: {},
   extraReducers: builder => {
-    builder.addCase(selectCurrency, state => {state.quote = null; state.quoteRequest = null; state.quoteLoading = false;})
+    builder.addCase(logout.pending, () => initialState)
+      .addCase(sessionExpired, () => initialState)
+      .addCase(selectCurrency, state => {state.quote = null; state.quoteRequest = null; state.quoteLoading = false;})
       .addCase(fetchQuote.pending, (state, action) => {state.quote = null; state.quoteError = null; state.quoteLoading = true; state.quoteRequest = action.meta.requestId;})
       .addCase(fetchQuote.fulfilled, (state, action) => {
         if (state.quoteRequest !== action.meta.requestId) return;

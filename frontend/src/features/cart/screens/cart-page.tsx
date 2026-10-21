@@ -11,7 +11,7 @@ export default function CartPage() {
   const cart = useAppSelector(state => state.cart);
   const currency = useAppSelector(state => state.currency);
   const auth = useAppSelector(state => state.auth);
-  const authReady = auth.initialized && !auth.loading;
+  const authReady = auth.initialized && !auth.loading && !auth.logoutError;
   const [code, setCode] = useState('');
   useEffect(() => {if (authReady) void dispatch(fetchCart());}, [authReady, auth.user?.id, dispatch]);
   useEffect(() => {

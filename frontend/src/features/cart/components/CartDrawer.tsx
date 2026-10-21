@@ -10,7 +10,7 @@ export default function CartDrawer() {
   const auth = useAppSelector(state => state.auth);
   const dispatch = useAppDispatch();
   const [open, setOpen] = useState(false);
-  useEffect(() => {if (open && auth.initialized && !auth.loading) void dispatch(fetchCart());}, [open, auth.initialized, auth.loading, auth.user?.id, dispatch]);
+  useEffect(() => {if (open && auth.initialized && !auth.loading && !auth.logoutError) void dispatch(fetchCart());}, [open, auth.initialized, auth.loading, auth.logoutError, auth.user?.id, dispatch]);
   return <>
     <button aria-expanded={open} aria-controls="basket-drawer" onClick={() => setOpen(!open)} className="fixed bottom-4 right-4 z-40 bg-brand-ink text-brand-paper p-3 rounded-full">Basket ({totalItems})</button>
     {open && <aside id="basket-drawer" aria-label="Basket summary" className="fixed inset-y-0 right-0 w-80 max-w-full bg-brand-paper shadow-xl z-50 p-4 flex flex-col">
