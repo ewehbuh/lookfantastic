@@ -11,6 +11,7 @@ export default function Dashboard() {
       <h1 className="text-2xl font-bold mb-4">My Account</h1>
       <p>Email: {user?.email}</p>
       <div className="mt-6 space-y-2">
+        <Link href="/account/orders" className="block underline">Order history</Link>
         <Link href="/account/addresses" className="block underline">Address book</Link>
         <Link href="/account/wishlist" className="block underline">Wishlist</Link>
         <Link href="/account/points" className="block underline">Beauty Bag Points</Link>

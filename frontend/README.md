@@ -107,8 +107,8 @@ Next.js/next-intl dependencies in a compatible environment.
 
 Audit feature API contracts, replace inherited untyped data with feature-owned types,
 and resolve lint findings before expanding functionality. Checkout now integrates hosted-payment handoff, currencies, saved addresses and
-configured payment methods. Backend-verified order status and recovery screens
-remain to be built. Subscription purchase must remain unavailable until real
+configured payment methods. Backend-verified order status, account order history and guest recovery screens
+are now integrated. Subscription purchase must remain unavailable until real
 recurring billing is implemented. The payment
 return page is explicitly pending; browser redirects do not prove payment success.
 
@@ -186,8 +186,8 @@ order total before a customer follows the hosted HTTPS payment link. Guest order
 capabilities are kept in sessionStorage when available, never in URLs. A browser
 redirect is not payment confirmation. Direct checkout reloads return customers to
 the basket for a fresh quote. Configured Stripe, bank and crypto choices and saved addresses are integrated.
-Token recovery UI and backend-verified payment/order status screens remain for
-the next checkout phase. No live
+Token recovery and backend-verified payment/order status screens are now integrated
+as described below. No live
 charges were made during verification.
 
 
@@ -271,3 +271,37 @@ rather than encouraging duplicate order creation. No live payment was attempted.
 Live read-only checks confirmed the methods response and anonymous address access
 rejection (401); backend address/voucher checkout tests provide isolated integration
 coverage without modifying a real customer's addresses.
+
+
+## Order confirmation and guest access
+
+The payment return route `/checkout/success?order=...` now reads backend order status.
+It checks a guest capability stored at checkout, or the signed-in customer's owner-
+scoped order endpoint. A redirect never proves payment: pending, paid, processing,
+shipped, cancelled and refunded states are rendered from backend responses. Manual
+refresh checks again without continuous polling or exceeding guest throttles by
+default. Payment confirmation still depends on verified provider webhooks reaching
+Django; missing/delayed webhook reconciliation remains a backend limitation.
+
+`/account/orders` lists paginated account orders and `/account/orders/[number]`
+shows purchased items, original-currency totals/address, shipment events, safe HTTPS
+tracking links, and return/refund states. Private order data is hidden on session or
+identity changes. Order history remains behind the account guard. This phase displays
+returns; submitting a new return is still future work.
+
+The footer links to `/orders/access`. Guest recovery posts order number and email
+and always shows the backend's generic acknowledgement. Matching guest orders receive
+an email when mail delivery is configured. The email token is removed from browser
+history immediately, sent only in a POST body to guest-status, and saved in this tab's
+sessionStorage only after successful verification. The page provides an explicit
+forget-access action. No access tokens are put in app links or localStorage. Both
+localized and unlocalized sensitive entry routes set `Referrer-Policy: no-referrer`.
+Deployment access logs/analytics should redact incoming capability URL parameters;
+client-side history cleanup cannot change a request that already reached the server.
+
+Missing/expired access offers sign-in or another guest recovery email. Guest orders
+do not become account orders just because the visitor subsequently signs in. API
+requests use the existing guest throttles. If sessionStorage is blocked or the tab
+is closed, email recovery is required. Development mail is console-only until SMTP
+is configured. Tests mock payment results and email requests; no live provider
+payment or customer email was sent.
