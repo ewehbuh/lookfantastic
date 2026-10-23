@@ -48,7 +48,7 @@ frontend/
         product/, category/, cart/, checkout/, blog/, subscriptions/
       admin/                 # Staff layout and routes; no storefront chrome
     features/
-      account/               # Customer profile, wishlist and points screens
+      account/               # Customer profile, addresses, wishlist and points screens
       admin/                 # Staff screens and administration controls
       auth/                  # Authentication screens, guards and state
       blog/                  # Editorial screens
@@ -106,9 +106,10 @@ Next.js/next-intl dependencies in a compatible environment.
 ## Next implementation work
 
 Audit feature API contracts, replace inherited untyped data with feature-owned types,
-and resolve lint findings before expanding functionality. Existing checkout screens
-still need the hosted-payment and currency integrations, and subscription purchase
-must remain unavailable until real recurring billing is implemented. The payment
+and resolve lint findings before expanding functionality. Checkout now integrates hosted-payment handoff, currencies, saved addresses and
+configured payment methods. Backend-verified order status and recovery screens
+remain to be built. Subscription purchase must remain unavailable until real
+recurring billing is implemented. The payment
 return page is explicitly pending; browser redirects do not prove payment success.
 
 
@@ -184,9 +185,9 @@ The existing checkout now sends the quoted currency and shows the final returned
 order total before a customer follows the hosted HTTPS payment link. Guest order
 capabilities are kept in sessionStorage when available, never in URLs. A browser
 redirect is not payment confirmation. Direct checkout reloads return customers to
-the basket for a fresh quote. This is the minimum currency-safe handoff: payment
-method selection (currently default Stripe), saved addresses, token recovery UI and
-backend-verified payment/order status screens remain for the checkout phase. No live
+the basket for a fresh quote. Configured Stripe, bank and crypto choices and saved addresses are integrated.
+Token recovery UI and backend-verified payment/order status screens remain for
+the next checkout phase. No live
 charges were made during verification.
 
 
@@ -237,3 +238,36 @@ same-site hosting is recommended. Axios uses Django's `csrftoken`/`X-CSRFToken`
 names for credentialed requests. These frontend changes do not harden Django's
 existing development deployment settings. Multi-tab logout coordination and full
 browser end-to-end provider tests remain future work.
+
+
+## Saved addresses and payment methods
+
+`/account/addresses` provides paginated address creation, editing, deletion with an
+explicit confirmation, and default selection through the owner-scoped Django API.
+Country codes are uppercased and validated as two letters. Backend validation errors
+preserve form values. Default address changes are PATCH requests; the backend owns
+single-default enforcement. Successful changes reload the list instead of inventing
+local address records or default states.
+
+Checkout loads `/api/payments/methods/` after session restoration. Only methods with
+`true` availability are offered, and submission stays disabled while availability is
+loading, failed, or has no enabled methods. Stripe card, Stripe bank and crypto choices
+send explicit `payment_method` values. The payment provider still decides eligibility
+for a particular account, country and currency; the UI explains asynchronous payment
+confirmation. Loading failure has a retry action.
+
+Signed-in customers can choose the default saved address, another saved address,
+or manual shipping details. More saved addresses load through local paginated URLs.
+Saved checkout sends only `address_id`; manual checkout sends shipping fields, never
+both. Guests do not request the private address API. If saved addresses cannot load,
+manual shipping remains available. Pending address requests are cancelled on identity
+changes, old-owner resources are hidden, and checkout form state resets when the
+signed-in identity changes. Typing manual shipping details prevents a later-loading
+default address from replacing that choice.
+
+After order creation, the final total/currency is shown before the hosted-payment
+link. An invalid/missing/non-HTTPS link retains the order number and a support message
+rather than encouraging duplicate order creation. No live payment was attempted.
+Live read-only checks confirmed the methods response and anonymous address access
+rejection (401); backend address/voucher checkout tests provide isolated integration
+coverage without modifying a real customer's addresses.
