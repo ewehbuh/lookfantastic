@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAppDispatch } from '@/store/hooks';
 import { addToCart } from '@/features/cart/state/cart-slice';
+import ProductReviews from '@/features/reviews/components/ProductReviews';
 import WishlistButton from '@/features/account/components/WishlistButton';
 import VariantSelector from '@/features/catalogue/components/VariantSelector';
 import type { ProductDetail } from '../types/catalogue';
@@ -124,6 +125,7 @@ export default function ProductDetailClient({ product }: { product: ProductDetai
         <p className="mt-6">{product.review_count} reviews{product.rating_average !== null ? ` · ${product.rating_average.toFixed(1)} / 5` : ''}</p>
         <div className="mt-8 whitespace-pre-line">{product.description}</div>
         {product.how_to_use && <section className="mt-6"><h2 className="font-bold">How to use</h2><p className="whitespace-pre-line">{product.how_to_use}</p></section>}
+        <ProductReviews productId={product.id} />
         {product.ingredients && <section className="mt-6"><h2 className="font-bold">Ingredients</h2><p className="whitespace-pre-line">{product.ingredients}</p></section>}
       </div>
     </div>

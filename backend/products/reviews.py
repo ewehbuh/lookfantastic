@@ -10,11 +10,16 @@ class ReviewSerializer(serializers.ModelSerializer):
     rating = serializers.IntegerField(min_value=1, max_value=5)
     product = serializers.PrimaryKeyRelatedField(queryset=visible_products())
     verified_purchase = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = Review
-        fields = ['id', 'product', 'rating', 'title', 'body', 'is_approved', 'verified_purchase', 'created_at']
+        fields = ['id', 'product', 'rating', 'title', 'body', 'is_approved', 'verified_purchase', 'is_owner', 'created_at']
         read_only_fields = ['is_approved', 'created_at']
+
+    def get_is_owner(self, obj):
+        request = self.context.get('request')
+        return bool(request and request.user.is_authenticated and request.user.pk == obj.user_id)
 
     def get_verified_purchase(self, obj):
         from cart.models import OrderItem
@@ -32,6 +37,12 @@ class ReviewViewSet(viewsets.ModelViewSet):
             query = query.filter(Q(is_approved=True) | Q(user=self.request.user))
         else:
             query = query.filter(is_approved=True)
+        if 'mine' in self.request.query_params:
+            mine = serializers.BooleanField().run_validation(self.request.query_params['mine'])
+            if mine:
+                if not self.request.user.is_authenticated:
+                    raise PermissionDenied('Sign in to view your reviews.')
+                query = query.filter(user=self.request.user)
         product = self.request.query_params.get('product')
         if product is not None:
             field = serializers.IntegerField(min_value=1)

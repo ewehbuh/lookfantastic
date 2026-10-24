@@ -36,3 +36,5 @@ export interface Homepage {
   bestsellers: ProductSummary[]; featured_brands: Brand[];
 }
 export type CatalogueSearchParams = Record<string, string | string[] | undefined>;
+
+export interface SearchResults extends ProductPage {query: string; corrected_query: string | null; correction_applied: boolean}

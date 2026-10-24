@@ -59,6 +59,8 @@ frontend/
       currency/              # Currency availability, preferences and price display
       orders/                # Order history, status and guest recovery
       returns/               # Account/guest return request flow
+      search/                # Query entry, suggestions and search route
+      reviews/               # Public and owned product review lifecycle
       subscriptions/         # Subscription screens
     components/
       layout/                # Shared storefront shell
@@ -152,8 +154,7 @@ produce product-not-found; failed detail requests reach a retry boundary. Produc
 controls select an available SKU, cap quantity at its stock, and show add-to-basket
 success/failure. Basket eligibility/prices remain authoritative on Django. Product
 text is escaped instead of injecting description HTML; rich-text formatting can be
-added later with an explicit sanitization policy. Review summaries and applicable
-offer names are displayed; review submission is a later phase.
+added later with an explicit sanitization policy. Review summaries, applicable offer names and the product review lifecycle are integrated.
 
 Catalogue tests cover API contracts, exact slug resolution, homepage empty responses,
 filter/pagination state, empty/error screens, stock controls and basket failures.
@@ -334,3 +335,38 @@ Points display reads the customer's actual `total_points` balance and paginated
 the browser or implement unsupported redemption. A failed load shows an error,
 not an invented zero balance. Wishlist and points requests are cancelled when their
 account screen unmounts, and pagination uses local API URLs.
+
+
+## Product search and reviews
+
+The header search routes to `/search?q=...`. Suggestions are debounced for 250 ms
+and cancelled/ignored when the query changes. Product suggestions link to product
+pages; brand suggestions apply the catalogue brand filter. Suggestions are optional:
+errors do not block submitting a search. Inputs support keyboard focus/tab navigation
+and Escape dismisses the suggestions. Queries are encoded and constrained to the
+backend's 200-character/ten-term limits.
+
+Search results use `/api/search/`, backend relevance ranking, filters and pagination.
+Backend typo corrections are displayed explicitly; “Search original wording” turns
+off typo correction while preserving query and filters, including repeated brands.
+Price filters remain in base currency. Empty and error states reuse catalogue UI.
+Category-local text filters still use the catalogue filter endpoint; global search
+uses the dedicated ranked search endpoint.
+
+Product details now load paginated reviews. Anonymous visitors see approved reviews
+and a sign-in prompt. Signed-in customers separately load `mine=true` to locate their
+own review regardless of which public page it appears on. Review create/edit payloads
+contain only rating/title/body (plus product on create); approval, ownership and
+verified-purchase badges are determined by Django. Edits return to moderation.
+Own reviews support editing and explicit delete confirmation; backend ownership
+permissions remain authoritative. Review text is escaped, and private review state
+resets when the customer changes. A router refresh updates product rating summaries
+after mutations. Duplicate/validation failures preserve input and display backend
+messages. No staff approval tools are added in this phase.
+
+Backend additions are backward-compatible serializer/query changes: `is_owner` is
+read-only, and `mine=true` requires authentication and filters to that requester,
+including for staff. No author ID/email is exposed. No migration is required, but
+restart Django from the current checkout so the frontend can use the new contract.
+Tests cover owner privacy, moderation, search query/filter preservation, stale
+suggestions and review lifecycle; real browser end-to-end testing is still pending.

@@ -251,3 +251,13 @@ Daily rates may remain unchanged over weekends/holidays. Four days is the defaul
 expiry limit; longer provider interruptions still disable affected currencies.
 Setting `FX_MAX_AGE_SECONDS` lower is supported but may disable conversion during
 weekends. Existing environment overrides are not automatically changed by deployment.
+
+
+## Review ownership for customer interfaces
+
+Review responses include read-only `is_owner`, derived from the authenticated
+requester without exposing author IDs or emails. `GET /api/reviews/?product=ID&mine=true`
+returns only the requester's review and requires authentication. Staff receive only
+their own reviews through this filter; moderation remains on the staff endpoint.
+`mine=false` retains normal approved-plus-own-pending visibility. Invalid boolean
+values return 400. These serializer/query changes require no database migration.

@@ -1,11 +1,14 @@
 import { isAxiosError, type AxiosInstance } from 'axios';
-import type { Homepage, ProductDetail, ProductPage } from '../types/catalogue';
+import type { Homepage, ProductDetail, ProductPage, SearchResults } from '../types/catalogue';
 
 // The transport is injected so server and browser requests keep separate credentials.
 export function createCatalogueApi(client: AxiosInstance) {
   return {
     async products(params = new URLSearchParams()): Promise<ProductPage> {
       return (await client.get<ProductPage>('/api/products/', {params})).data;
+    },
+    async search(params: URLSearchParams): Promise<SearchResults> {
+      return (await client.get<SearchResults>('/api/search/', {params})).data;
     },
     async product(slug: string): Promise<ProductDetail | null> {
       const list = (await client.get<ProductPage>('/api/products/', {params: {slug}})).data;

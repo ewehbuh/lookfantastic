@@ -123,3 +123,32 @@ class PromotionsAndReviewsTests(TestCase):
         order.status = 'paid'
         order.save()
         self.assertTrue(self.client.get(f'/api/reviews/{review.pk}/').data['verified_purchase'])
+
+
+    def test_review_ownership_flag_is_read_only_and_reveals_no_author_identity(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.post('/api/reviews/', {'product': self.product.pk, 'rating': 4,
+            'title': 'Good', 'body': 'Useful cream', 'is_owner': False})
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data['is_owner'])
+        self.assertFalse({'user', 'email', 'author'} & set(response.data))
+        Review.objects.filter(pk=response.data['id']).update(is_approved=True)
+        self.client.force_authenticate(self.other)
+        other = self.client.get(f"/api/reviews/{response.data['id']}/")
+        self.assertFalse(other.data['is_owner'])
+        self.client.force_authenticate(None)
+        self.assertFalse(self.client.get(f"/api/reviews/{response.data['id']}/").data['is_owner'])
+
+    def test_mine_filter_is_owner_scoped_and_requires_authentication(self):
+        own = Review.objects.create(product=self.product, user=self.user, rating=4, title='Own', body='Pending')
+        Review.objects.create(product=self.product, user=self.other, rating=5, title='Other', body='Public', is_approved=True)
+        url = f'/api/reviews/?product={self.product.pk}&mine=true'
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_authenticate(self.user)
+        response = self.client.get(url)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['id'], own.pk)
+        self.assertTrue(response.data['results'][0]['is_owner'])
+        self.client.force_authenticate(self.staff)
+        self.assertEqual(self.client.get(url).data['count'], 0)
+        self.assertEqual(self.client.get('/api/reviews/?mine=invalid').status_code, 400)

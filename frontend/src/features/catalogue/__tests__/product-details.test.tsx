@@ -9,7 +9,7 @@ import ProductDetailClient from '../components/ProductDetailClient';
 import type { ProductDetail } from '../types/catalogue';
 import { product, variant } from './fixtures';
 
-vi.mock('@/i18n/navigation', () => ({Link: (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />}));
+vi.mock('@/i18n/navigation', () => ({Link: (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />, useRouter: () => ({refresh: vi.fn()})}));
 
 function show(data: ProductDetail = product) {
   render(<Provider store={makeStore()}><ProductDetailClient product={data} /></Provider>);
@@ -36,14 +36,14 @@ describe('product purchase controls', () => {
     expect(quantity).toHaveValue(3);
     await user.click(screen.getByRole('button', {name: 'Add to Cart'}));
     expect(post).toHaveBeenCalledWith('/api/cart/add/', {variant_id: 7, quantity: 3});
-    expect(await screen.findByRole('status')).toHaveTextContent('Item added');
+    expect(await screen.findByText('Item added to your basket.')).toHaveAttribute('role', 'status');
   });
   it('shows a recoverable error instead of claiming the basket changed', async () => {
     vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('Insufficient stock'));
     const user = show();
     await user.click(screen.getByRole('button', {name: 'Add to Cart'}));
     expect(await screen.findByRole('alert')).toHaveTextContent('Unable to add');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Item added to your basket.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Add to Cart'})).toBeEnabled();
   });
   it('renders product descriptions as text rather than executing embedded markup', () => {

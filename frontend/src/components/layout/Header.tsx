@@ -4,6 +4,7 @@ import { Link } from '@/i18n/navigation';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { logout } from '@/features/auth/state/auth-slice';
 import CurrencySelector from '@/features/currency/components/CurrencySelector';
+import SearchBox from '@/features/search/components/SearchBox';
 import MegaMenu from './MegaMenu';
 
 export default function Header() {
@@ -14,12 +15,13 @@ export default function Header() {
   return (
     <header className="bg-brand-paper text-brand-ink border-b border-brand-border">
       {authError && <div role="alert" className="p-3 text-sm">{authError} <button onClick={() => void dispatch(logout())} className="underline">Retry logout</button></div>}
-      <div className="max-w-7xl mx-auto flex items-center justify-between p-4">
+      <div className="max-w-7xl mx-auto flex flex-wrap gap-4 items-center justify-between p-4">
         <Link href="/" className="text-xl font-bold">
           Lookfantastic
         </Link>
 
         <Link href="/products" className="text-sm underline">Shop all</Link>
+        <SearchBox />
         <MegaMenu />
         <CurrencySelector />
 
