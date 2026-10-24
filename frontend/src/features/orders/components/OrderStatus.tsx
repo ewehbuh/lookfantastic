@@ -5,11 +5,13 @@ import { useAppSelector } from '@/store/hooks';
 import { ordersApi } from '../api/orders';
 import { apiError } from '@/lib/api/errors';
 import type { Order } from '../types/order';
+import ReturnRequestForm from '@/features/returns/components/ReturnRequestForm';
 import OrderSummary from './OrderSummary';
 
 export default function OrderStatus({number, token, guestOnly = false}: {number: string; token?: string; guestOnly?: boolean}) {
   const auth = useAppSelector(state => state.auth);
   const owner = token ? 'guest-capability' : !guestOnly && auth.initialized && !auth.loading && !auth.logoutError ? auth.user?.id ?? null : null;
+  const [notice, setNotice] = useState<{owner: typeof owner; number: string; message: string} | null>(null);
   const [revision, setRevision] = useState(0);
   const [resource, setResource] = useState<{owner: typeof owner; number: string; token?: string; revision: number; order: Order | null; error: string} | null>(null);
   useEffect(() => {
@@ -31,7 +33,8 @@ export default function OrderStatus({number, token, guestOnly = false}: {number:
   return <div>
     {!current && <p role="status">Checking order status…</p>}
     {current?.error && <div role="alert">{current.error} <Link href={`/orders/access?order_number=${encodeURIComponent(number)}`} className="underline">Request guest access</Link></div>}
-    {current?.order && <OrderSummary order={current.order} />}
+    {notice?.owner === owner && notice?.number === number && owner !== null && <p role="status">{notice.message}</p>}
+    {current?.order && <><OrderSummary order={current.order} /><ReturnRequestForm key={`${owner}-${number}`} order={current.order} token={token} onCreated={() => {setNotice({owner, number, message: 'Return request submitted for staff review. A refund has not been issued.'}); setRevision(value => value+1);}} /></>}
     <button disabled={!current} onClick={() => setRevision(value => value+1)} className="border p-3 mt-6">Refresh order status</button>
   </div>;
 }

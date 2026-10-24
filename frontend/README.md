@@ -56,6 +56,9 @@ frontend/
       catalogue/             # Product/category screens and product components
       checkout/              # Checkout and payment-return screens
       home/                  # Homepage screen and public catalogue API service
+      currency/              # Currency availability, preferences and price display
+      orders/                # Order history, status and guest recovery
+      returns/               # Account/guest return request flow
       subscriptions/         # Subscription screens
     components/
       layout/                # Shared storefront shell
@@ -286,8 +289,7 @@ Django; missing/delayed webhook reconciliation remains a backend limitation.
 `/account/orders` lists paginated account orders and `/account/orders/[number]`
 shows purchased items, original-currency totals/address, shipment events, safe HTTPS
 tracking links, and return/refund states. Private order data is hidden on session or
-identity changes. Order history remains behind the account guard. This phase displays
-returns; submitting a new return is still future work.
+identity changes. Order history remains behind the account guard. Return states and return submission are integrated as described below.
 
 The footer links to `/orders/access`. Guest recovery posts order number and email
 and always shows the backend's generic acknowledgement. Matching guest orders receive
@@ -305,3 +307,30 @@ requests use the existing guest throttles. If sessionStorage is blocked or the t
 is closed, email recovery is required. Development mail is console-only until SMTP
 is configured. Tests mock payment results and email requests; no live provider
 payment or customer email was sent.
+
+
+## Returns, wishlist and points
+
+Paid/processing/shipped order details offer a return request form for account and
+guest orders. Remaining quantities exclude previous non-rejected return requests,
+matching backend reservation rules. The form sends the historical order-item ID,
+integer quantity and reason; guest capability goes only in the POST body. Django
+checks ownership, return window and quantities. Successful requests refresh the
+order and show staff-review status, never an automatic refund. Validation failures
+preserve input. Network/server outcomes that cannot be confirmed require an order
+status refresh before another submission, rather than encouraging blind retries.
+
+Product details let signed-in customers save a product using `product_id`. The
+paginated wishlist supports removal using the wishlist record ID, with empty/error
+states and retry. Duplicate errors are surfaced from Django; the button does not
+pretend a failed request succeeded. Removing the last item on a later page moves
+to the previous page so the customer is not stranded on an invalid page number.
+Guest visitors are directed to sign in. Shared API clients handle authentication;
+account layouts protect private pages.
+
+Points display reads the customer's actual `total_points` balance and paginated
+`results` history, including separate earned/spent labels. It does not send staff
+`user_id` overrides, infer balances from one page of transactions, award points in
+the browser or implement unsupported redemption. A failed load shows an error,
+not an invented zero balance. Wishlist and points requests are cancelled when their
+account screen unmounts, and pagination uses local API URLs.

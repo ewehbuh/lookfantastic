@@ -99,6 +99,18 @@ describe('verified order status', () => {
     expect(await screen.findByText('No orders yet.')).toBeInTheDocument();
     expect(get).toHaveBeenLastCalledWith('/api/orders/', expect.objectContaining({params: {page: 2}}));
   });
+  it('reloads server return state after a successful request', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValueOnce({data: {...order, status: 'paid'}})
+      .mockResolvedValue({data: {...order, status: 'paid', returns: [{id: 9, item: 1, quantity: 1, reason: 'Damaged', status: 'requested'}]}});
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({data: {id: 9, status: 'requested'}});
+    render(<Provider store={signedIn()}><OrderStatus number="ORDER1" /></Provider>);
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText('Reason'), 'Damaged');
+    await user.click(screen.getByRole('button', {name: 'Submit return request'}));
+    expect(post).toHaveBeenCalledWith('/api/returns/', expect.objectContaining({item_id: 1, quantity: 1}));
+    expect(await screen.findByText('Return 9: requested · 1 item(s)')).toBeInTheDocument();
+    expect(screen.getByRole('option')).toHaveTextContent('1 remaining');
+  });
   it('shows safe tracking links and refund states in the original order currency', () => {
     render(<OrderSummary order={{...order, status: 'refunded', refunded_amount: '21.99', shipments: [{id: 1, carrier: 'Carrier', tracking_number: 'TRACK', status: 'delivered', tracking_url: 'javascript:alert(1)', events: []}], refunds: [{id: 1, amount: '21.99', currency: 'gbp', status: 'succeeded', created_at: ''}]}} />);
     expect(screen.getByText('Order refunded')).toBeInTheDocument();

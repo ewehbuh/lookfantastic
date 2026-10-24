@@ -1,3 +1,4 @@
+import type { AnchorHTMLAttributes } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Provider } from 'react-redux';
@@ -7,6 +8,8 @@ import apiClient from '@/lib/api/client';
 import ProductDetailClient from '../components/ProductDetailClient';
 import type { ProductDetail } from '../types/catalogue';
 import { product, variant } from './fixtures';
+
+vi.mock('@/i18n/navigation', () => ({Link: (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />}));
 
 function show(data: ProductDetail = product) {
   render(<Provider store={makeStore()}><ProductDetailClient product={data} /></Provider>);

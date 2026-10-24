@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAppDispatch } from '@/store/hooks';
 import { addToCart } from '@/features/cart/state/cart-slice';
+import WishlistButton from '@/features/account/components/WishlistButton';
 import VariantSelector from '@/features/catalogue/components/VariantSelector';
 import type { ProductDetail } from '../types/catalogue';
 import Price from '@/features/currency/components/Price';
@@ -116,6 +117,7 @@ export default function ProductDetailClient({ product }: { product: ProductDetai
           {!selectedVariant || selectedVariant.stock < 1 ? 'Out of stock' : adding ? 'Adding...' : added ? 'Added ✓' : 'Add to Cart'}
         </button>
 
+        <WishlistButton productId={product.id} />
         {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
         {added && <p role="status" className="mt-3">Item added to your basket.</p>}
         {product.offers.map(offer => <p key={offer.id} className="mt-3 border p-3">{offer.name} · Applied in your basket when eligible</p>)}
